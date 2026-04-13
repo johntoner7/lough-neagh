@@ -235,8 +235,10 @@ html, body, #root {
 
 @media (max-width: 760px) {
   .station-drawer {
+    position: fixed;
     left: 0;
     right: 0;
+    bottom: 0;
     top: auto;
     width: auto;
     height: min(70dvh, 540px);
@@ -1204,24 +1206,21 @@ input[type="range"]::-moz-range-thumb {
     line-height: 1.4;
   }
 
-  /* sparkline panel: 2 columns on mobile */
+  /* sparkline panel: single column on mobile */
   .sparkline-panel {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 
-  .sparkline-cell:nth-child(3n) {
-    border-right: 1px solid var(--border);
-  }
-
-  .sparkline-cell:nth-child(2n) {
+  .sparkline-cell,
+  .sparkline-cell:nth-child(3n),
+  .sparkline-cell:nth-child(2n),
+  .sparkline-cell:nth-child(n+4),
+  .sparkline-cell:nth-child(n+5) {
     border-right: none;
-  }
-
-  .sparkline-cell:nth-child(n+4) {
     border-bottom: 1px solid var(--border);
   }
 
-  .sparkline-cell:nth-child(n+5) {
+  .sparkline-cell:last-child {
     border-bottom: none;
   }
 
