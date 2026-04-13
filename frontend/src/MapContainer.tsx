@@ -2,15 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import Map, {
   Source,
   Layer,
-  Marker,
   NavigationControl,
   type MapMouseEvent,
   type MapRef,
   type ViewStateChangeEvent,
 } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
-
-import { UI_TEXT } from './uiText'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from './types'
 import type { ExpressionSpecification } from 'mapbox-gl'
@@ -156,22 +153,6 @@ export default function MapContainer({
           }}
         />
       </Source>
-
-      {/* ── Lough Neagh callout annotation ── */}
-      <Marker
-        longitude={-6.4}
-        latitude={54.6}
-        anchor="center"
-        pitchAlignment="viewport"
-        rotationAlignment="viewport"
-      >
-        <div
-          className="lough-neagh-callout"
-          style={{ transform: `scale(${Math.pow(2, zoom - 7.8).toFixed(4)})`, transformOrigin: 'center' }}
-        >
-          {UI_TEXT.map.calloutLine1}<br />{UI_TEXT.map.calloutLine2}
-        </div>
-      </Marker>
     </Map>
   )
 }

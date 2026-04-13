@@ -58,10 +58,6 @@ export const UI_TEXT = {
     argumentLine1: 'Lough Neagh supplies 40% of Northern Ireland\'s drinking water. In 2023 it turned green with toxic algae visible from space.',
     argumentLine2: 'Agriculture contributes 62% of the phosphorus driving it. These are the rivers carrying it — and most are still failing the legal limit.',
   },
-  map: {
-    calloutLine1: 'These six rivers',
-    calloutLine2: 'feed Lough Neagh',
-  },
   drawer: {
     closeAriaLabel: 'Close station details',
     closeSymbol: '×',

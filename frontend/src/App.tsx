@@ -12,6 +12,7 @@ import type {
   GeoJSONCollection,
   StationFeature,
   StationTimeSeries,
+  SummaryStats,
 } from './types'
 
 const KEY_STATION_CODES_ORDERED = [10212, 10233, 10271, 10328, 10361, 10380]
@@ -21,9 +22,9 @@ const EMPTY_COLLECTION: GeoJSONCollection = { type: 'FeatureCollection', feature
 export default function App() {
   const [token, setToken] = useState('')
   const [catchments, setCatchments] = useState<string[]>([])
-  const [year, setYear] = useState(1990)
+  const [year, setYear] = useState(2024)
   const [catchment, setCatchment] = useState('')
-  const [showAllStations, setShowAllStations] = useState(false)
+  const [showAllStations, setShowAllStations] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [stationsData, setStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
   const [keyStationsData, setKeyStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
@@ -133,6 +134,24 @@ export default function App() {
     setDrawerOpen(false)
   }, [])
 
+  const summary = useMemo((): SummaryStats => {
+    const features = stationsData.features
+    const withData = features.filter(f => f.properties.metric_p_sol !== null)
+    const aboveThreshold = withData.filter(f => (f.properties.metric_p_sol ?? 0) >= 0.035)
+    const pct = withData.length > 0
+      ? Math.round((aboveThreshold.length / withData.length) * 100)
+      : 0
+    const mean = withData.length > 0
+      ? (withData.reduce((s, f) => s + (f.properties.metric_p_sol ?? 0), 0) / withData.length).toFixed(3)
+      : '—'
+    return {
+      stationsWithData: withData.length,
+      stationsAboveThreshold: aboveThreshold.length,
+      pctAboveThreshold: pct,
+      networkMean: mean,
+    }
+  }, [stationsData])
+
   const allKeySeriesData = useMemo(() => {
     const map = new Map<number, StationTimeSeries>()
     for (const code of KEY_STATION_CODES_ORDERED) {
@@ -209,6 +228,8 @@ export default function App() {
           </div>
 
           <ControlsPanel
+            year={year}
+            summary={summary}
             catchment={catchment}
             catchments={catchments}
             showAllStations={showAllStations}
