@@ -772,35 +772,71 @@ input[type="range"]::-moz-range-thumb {
   background: #fdf3ee;
 }
 
-.floating-play-btn {
+.floating-player {
   position: fixed;
   left: 50%;
   bottom: calc(14px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 60;
-  padding: 9px 16px;
+  display: flex;
+  align-items: center;
   border-radius: 999px;
   border: 1px solid var(--border-hi);
   background: var(--surface);
-  color: var(--text-muted);
-  font-family: var(--font);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  cursor: pointer;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  font-family: var(--font);
+  overflow: hidden;
 }
 
-.floating-play-btn:hover {
-  border-color: var(--accent);
+.player-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 9px 13px;
+  font-size: 13px;
+  line-height: 1;
+  transition: color 0.15s, background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-btn:hover:not(:disabled) {
   color: var(--text);
+  background: var(--surface-hi);
 }
 
-.floating-play-btn.active {
-  border-color: var(--accent);
+.player-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.player-play {
+  font-size: 12px;
+  padding: 9px 12px;
+}
+
+.player-play.active {
   color: var(--accent);
-  background: #fdf3ee;
+}
+
+.player-year {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+  min-width: 38px;
+  text-align: center;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.player-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  flex-shrink: 0;
 }
 
 /* ─── Catchment select ──────────────────────────────────────────────────── */
@@ -1063,9 +1099,16 @@ input[type="range"]::-moz-range-thumb {
     border-bottom: none;
   }
 
-  .floating-play-btn {
+  .floating-player {
     bottom: calc(10px + env(safe-area-inset-bottom));
-    padding: 8px 14px;
+  }
+
+  .player-btn {
+    padding: 8px 11px;
+    font-size: 12px;
+  }
+
+  .player-year {
     font-size: 11px;
   }
 }

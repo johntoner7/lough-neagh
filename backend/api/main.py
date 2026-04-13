@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from backend.api.db import get_conn
-from backend.api.routes import catchments, stations
+from api.db import get_conn
+from api.routes import catchments, stations
 
 app = FastAPI(
     title="NI River Phosphorus API",

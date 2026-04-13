@@ -232,13 +232,38 @@ export default function App() {
         <p>{UI_TEXT.sidebar.methodology.source}</p>
       </footer>
 
-      <button
-        className={`floating-play-btn${isPlaying ? ' active' : ''}`}
-        onClick={handleTogglePlay}
-        type="button"
-      >
-        {isPlaying ? UI_TEXT.sidebar.controls.pause : UI_TEXT.sidebar.controls.play}
-      </button>
+      <div className="floating-player">
+        <button
+          className="player-btn player-step"
+          onClick={() => handleYearChange(Math.max(1990, year - 1))}
+          type="button"
+          disabled={year <= 1990}
+          aria-label="Previous year"
+        >
+          ‹
+        </button>
+        <div className="player-divider" />
+        <button
+          className={`player-btn player-play${isPlaying ? ' active' : ''}`}
+          onClick={handleTogglePlay}
+          type="button"
+          aria-label={isPlaying ? UI_TEXT.sidebar.controls.pause : UI_TEXT.sidebar.controls.play}
+        >
+          {isPlaying ? '⏸' : '▶'}
+        </button>
+        <div className="player-divider" />
+        <span className="player-year">{year}</span>
+        <div className="player-divider" />
+        <button
+          className="player-btn player-step"
+          onClick={() => handleYearChange(Math.min(2024, year + 1))}
+          type="button"
+          disabled={year >= 2024}
+          aria-label="Next year"
+        >
+          ›
+        </button>
+      </div>
     </div>
   )
 }

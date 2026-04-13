@@ -8,8 +8,8 @@ from typing import Optional
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.api.db import get_conn
-from backend.api.models import (
+from api.db import get_conn
+from api.models import (
     CollectionMetadata,
     StationCollection,
     StationFeature,

@@ -1,0 +1,30 @@
+[project]
+name = "runoff"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "geopandas>=1.1.3",
+    "psycopg2-binary>=2.9.9",
+    "sqlalchemy>=2.0.0",
+    "geoalchemy2>=0.17.0",
+    "prefect>=3.0.0",
+    "pandas>=3.0.2",
+    "shapely>=2.0.0",
+    "pyproj>=3.7.0",
+    "pymannkendall>=1.4.3",
+    "python-dotenv>=1.0.1",
+    "pytest>=8.0.0",
+    "httpx>=0.27.0",
+    "matplotlib>=3.10.8",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["api", "pipeline", "scripts"]

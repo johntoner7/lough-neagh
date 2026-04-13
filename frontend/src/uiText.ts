@@ -91,7 +91,7 @@ export const UI_TEXT = {
       10233:
         'The Six Mile Water flows through a heavily farmed lowland catchment. Phosphorus consistently sits just above the legal threshold.',
       10271:
-        'The Upper Bann has never recorded a single year below the legal phosphorus limit in 35 years of monitoring. Every year, without exception, it has delivered phosphorus into Lough Neagh above the threshold that defines safe ecological status. Levels are rising, not falling.',
+        'The Upper Bann has never recorded a single year below the legal phosphorus limit in 35 years of monitoring. Every year, without exception, it has delivered phosphorus into Lough Neagh above the threshold that defines safe ecological status.',
       10328:
         'The Blackwater catchment spans the NI–Republic border. Persistent agricultural runoff has kept levels above the WFD limit for decades.',
       10361:

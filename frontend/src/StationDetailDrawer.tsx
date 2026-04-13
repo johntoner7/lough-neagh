@@ -32,6 +32,29 @@ export default function StationDetailDrawer({
     return { transform: `translateY(${dragOffset}px)` }
   }, [dragOffset, open])
 
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content || !open) {
+      setShowScrollHint(false)
+      return
+    }
+
+    const updateHint = () => {
+      const hasOverflow = content.scrollHeight - content.clientHeight > 16
+      const nearTop = content.scrollTop < 20
+      setShowScrollHint(hasOverflow && nearTop)
+    }
+
+    updateHint()
+    const rafId = requestAnimationFrame(updateHint)
+    window.addEventListener('resize', updateHint)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', updateHint)
+    }
+  }, [open, feature, timeSeries])
+
   if (!feature) {
     return null
   }
@@ -57,29 +80,6 @@ export default function StationDetailDrawer({
     setDragOffset(0)
     startY.current = null
   }
-
-  useEffect(() => {
-    const content = contentRef.current
-    if (!content || !open) {
-      setShowScrollHint(false)
-      return
-    }
-
-    const updateHint = () => {
-      const hasOverflow = content.scrollHeight - content.clientHeight > 16
-      const nearTop = content.scrollTop < 20
-      setShowScrollHint(hasOverflow && nearTop)
-    }
-
-    updateHint()
-    const rafId = requestAnimationFrame(updateHint)
-    window.addEventListener('resize', updateHint)
-
-    return () => {
-      cancelAnimationFrame(rafId)
-      window.removeEventListener('resize', updateHint)
-    }
-  }, [open, feature, timeSeries])
 
   const onContentScroll = () => {
     const content = contentRef.current

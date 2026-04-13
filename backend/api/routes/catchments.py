@@ -5,8 +5,8 @@ from __future__ import annotations
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.api.db import get_conn
-from backend.api.models import CatchmentSummary, StationProperties
+from api.db import get_conn
+from api.models import CatchmentSummary, StationProperties
 
 router = APIRouter(prefix="/catchments", tags=["catchments"])
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import Map, {
   Source,
   Layer,
@@ -6,6 +6,7 @@ import Map, {
   NavigationControl,
   type MapMouseEvent,
   type MapRef,
+  type ViewStateChangeEvent,
 } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
@@ -55,6 +56,11 @@ export default function MapContainer({
   onStationClick,
 }: Props) {
   const mapRef = useRef<MapRef>(null)
+  const [zoom, setZoom] = useState(7.8)
+
+  const handleZoom = useCallback((e: ViewStateChangeEvent) => {
+    setZoom(e.viewState.zoom)
+  }, [])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
     const feature = e.features?.[0]
@@ -75,6 +81,7 @@ export default function MapContainer({
       style={{ width: '100%', height: '100%' }}
       interactiveLayerIds={['stations-circle', 'key-stations-circle']}
       onClick={handleMapClick}
+      onZoom={handleZoom}
       onMouseEnter={() => { document.body.style.cursor = 'pointer' }}
       onMouseLeave={() => { document.body.style.cursor = '' }}
       attributionControl={false}
@@ -158,7 +165,10 @@ export default function MapContainer({
         pitchAlignment="viewport"
         rotationAlignment="viewport"
       >
-        <div className="lough-neagh-callout">
+        <div
+          className="lough-neagh-callout"
+          style={{ transform: `scale(${Math.pow(2, zoom - 7.8).toFixed(4)})`, transformOrigin: 'center' }}
+        >
           {UI_TEXT.map.calloutLine1}<br />{UI_TEXT.map.calloutLine2}
         </div>
       </Marker>
