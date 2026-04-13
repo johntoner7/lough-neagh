@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+geopandas
+psycopg2-binary
+sqlalchemy
+geoalchemy2
+prefect
+pandas
+shapely
+pyproj
+pymannkendall
+python-dotenv
+pytest
+httpx

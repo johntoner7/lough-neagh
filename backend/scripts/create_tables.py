@@ -1,0 +1,86 @@
+"""Create the core database tables for the phosphorus pipeline."""
+
+from __future__ import annotations
+
+import os
+
+from sqlalchemy import create_engine, text
+
+
+TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS stations (
+    station_code        INTEGER PRIMARY KEY,
+    location_name       TEXT NOT NULL,
+    wfd_site_id         TEXT,
+    river_waterbody_id  TEXT,
+    catchment_name      TEXT,
+    easting             INTEGER NOT NULL,
+    northing            INTEGER NOT NULL,
+    geom                GEOMETRY(POINT, 29902),
+    wfd_matched         BOOLEAN NOT NULL DEFAULT FALSE,
+    first_reading       DATE,
+    last_reading        DATE,
+    total_readings      INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS readings (
+    id                  SERIAL PRIMARY KEY,
+    station_code        INTEGER REFERENCES stations(station_code),
+    reading_date        DATE NOT NULL,
+    p_sol_mg_l          FLOAT,
+    no3_n_mg_l          FLOAT,
+    no2_n_mg_l          FLOAT,
+    below_detection     BOOLEAN DEFAULT FALSE,
+    sparse_year         BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS annual_metrics (
+    id                  SERIAL PRIMARY KEY,
+    station_code        INTEGER REFERENCES stations(station_code),
+    year                INTEGER NOT NULL,
+    annual_mean_p_sol   FLOAT,
+    reading_count       INTEGER,
+    sparse_year         BOOLEAN DEFAULT FALSE,
+    wfd_compliant       BOOLEAN,
+    rolling_mean_5yr    FLOAT,
+    UNIQUE(station_code, year)
+);
+
+CREATE TABLE IF NOT EXISTS trend_results (
+    station_code        INTEGER PRIMARY KEY REFERENCES stations(station_code),
+    trend_direction     TEXT,
+    p_value             FLOAT,
+    sens_slope          FLOAT,
+    significant         BOOLEAN,
+    years_analysed      INTEGER,
+    computed_at         TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS waterbodies (
+    river_waterbody_id  TEXT PRIMARY KEY,
+    catchment_name      TEXT,
+    geom                GEOMETRY(MULTIPOLYGON, 29902)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
+CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
+"""
+
+
+def main() -> None:
+    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    engine = create_engine(database_url)
+
+    with engine.begin() as connection:
+        for statement in TABLES_SQL.split(";"):
+            stmt = statement.strip()
+            if stmt:
+                connection.execute(text(f"{stmt};"))
+
+    print("Core tables ensured.")
+
+
+if __name__ == "__main__":
+    main()
