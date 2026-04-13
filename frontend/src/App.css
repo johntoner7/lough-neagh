@@ -1,0 +1,17 @@
+/* App.css */
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.map-sidebar-container {
+  display: flex;
+  flex: 1;
+}
+
+.timeline-bar {
+  position: relative;
+  z-index: 10;
+}
