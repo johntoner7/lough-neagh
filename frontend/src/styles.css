@@ -180,6 +180,25 @@ html, body, #root {
   padding: 16px 18px 14px;
 }
 
+.station-drawer-scroll-hint {
+  position: sticky;
+  bottom: 0;
+  margin: 10px -18px -14px;
+  padding: 8px 18px 10px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-muted);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.96) 48%, rgba(255, 255, 255, 1));
+  border-top: 1px solid var(--border);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.station-drawer-scroll-hint--visible {
+  opacity: 1;
+}
+
 .station-drawer .detail-back {
   display: none;
 }
@@ -216,6 +235,10 @@ html, body, #root {
 
   .station-drawer-content {
     padding-top: 14px;
+  }
+
+  .station-drawer-scroll-hint {
+    margin-bottom: 0;
   }
 }
 
@@ -453,10 +476,29 @@ html, body, #root {
   color: var(--text-dim);
 }
 
+.headline-narration {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-dim);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
 .headline-hint {
   font-size: 10px;
   color: var(--text-dim);
   margin-top: 8px;
+}
+
+/* ─── Sediment callout ───────────────────────────────────────────────────── */
+.sediment-callout {
+  padding: 10px 12px;
+  background: var(--surface-hi);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.55;
 }
 
 /* ─── Station detail panel ──────────────────────────────────────────────── */

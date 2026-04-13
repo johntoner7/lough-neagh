@@ -10,14 +10,16 @@ export const UI_TEXT = {
     subtitle: 'DAERA monitoring network · 1990–2024',
     collapseAriaLabel: 'Collapse sidebar',
     expandAriaLabel: 'Expand sidebar',
-    baselineHeadline: '1990 mean phosphorus: 0.34 mg/l (nearly 10× the legal limit)',
-    baselineSubline:
-      'Every monitored station exceeded the WFD threshold. Press Play to see what changed — and what didn\'t.',
+    baselineHeadline: 'In 1990, every river in this network was above the legal phosphorus limit. The algae blooms of 2023 were decades in the making.',
+    baselineSubline: 'Press Play to see what improved, what did not, and why it matters now.',
     aboveThresholdLabel: 'of rivers above legal threshold',
+    narrationSewage: 'Improvement driven by sewage works upgrades from the 1980s.',
+    narrationStalled: 'Progress stalled. Agricultural runoff now dominates and has no equivalent regulation.',
     aboveThresholdSummary: (above: number, total: number, year: number) =>
       `${above} of ${total} monitored stations exceed the WFD phosphorus limit (0.035 mg/l) in ${year}`,
     noDataForYear: 'No data for this year',
     headlineHint: 'Click a circle on the map for detail.',
+    sedimentCallout: 'Even if every river reached compliance today, AFBI scientists estimate Lough Neagh would take around 40 years to recover. The phosphorus is already in the sediment.',
     sections: {
       year: 'Year',
       stationView: 'Station view',
@@ -53,8 +55,8 @@ export const UI_TEXT = {
     },
   },
   header: {
-    argumentLine1: 'Agriculture contributes 62% of the phosphorus entering Lough Neagh.',
-    argumentLine2: 'These are the rivers carrying it.',
+    argumentLine1: 'Lough Neagh supplies 40% of Northern Ireland\'s drinking water. In 2023 it turned green with toxic algae visible from space.',
+    argumentLine2: 'Agriculture contributes 62% of the phosphorus driving it. These are the rivers carrying it — and most are still failing the legal limit.',
   },
   map: {
     calloutLine1: 'These six rivers',
@@ -89,13 +91,13 @@ export const UI_TEXT = {
       10233:
         'The Six Mile Water flows through a heavily farmed lowland catchment. Phosphorus consistently sits just above the legal threshold.',
       10271:
-        'The Upper Bann carries the highest phosphorus load of the six tributaries, more than three times the WFD good-status limit in some years.',
+        'The Upper Bann has never recorded a single year below the legal phosphorus limit in 35 years of monitoring. Every year, without exception, it has delivered phosphorus into Lough Neagh above the threshold that defines safe ecological status. Levels are rising, not falling.',
       10328:
         'The Blackwater catchment spans the NI–Republic border. Persistent agricultural runoff has kept levels above the WFD limit for decades.',
       10361:
         'The Ballinderry approaches compliance in wetter years but consistently exceeds the legal threshold, linked to intensive livestock farming.',
       10380:
-        'The Moyola improved through the 2000s and briefly approached compliance, the only tributary to do so. Since 2013, levels have been rising, a trend confirmed as statistically significant.',
+        'The Moyola came closer to compliance than any other tributary, recording its lowest levels between 2006 and 2009. Since 2013 that progress has reversed, a trend confirmed as statistically significant. The reversal coincides with a period of significant dairy expansion in NI — EU milk quotas were abolished in 2015 and the dairy herd grew substantially in subsequent years. Of all six rivers, the Moyola most clearly shows what happens when agricultural growth outpaces regulation.',
     } as Record<number, string>,
   },
   sparkline: {

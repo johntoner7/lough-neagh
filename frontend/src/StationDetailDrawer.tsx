@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type TouchEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 
 import StationDetail from './StationDetail'
 import { UI_TEXT } from './uiText'
@@ -21,7 +21,9 @@ export default function StationDetailDrawer({
   onClose,
 }: Props) {
   const startY = useRef<number | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
+  const [showScrollHint, setShowScrollHint] = useState(false)
 
   const drawerStyle = useMemo(() => {
     if (!open || dragOffset <= 0) {
@@ -56,6 +58,39 @@ export default function StationDetailDrawer({
     startY.current = null
   }
 
+  useEffect(() => {
+    const content = contentRef.current
+    if (!content || !open) {
+      setShowScrollHint(false)
+      return
+    }
+
+    const updateHint = () => {
+      const hasOverflow = content.scrollHeight - content.clientHeight > 16
+      const nearTop = content.scrollTop < 20
+      setShowScrollHint(hasOverflow && nearTop)
+    }
+
+    updateHint()
+    const rafId = requestAnimationFrame(updateHint)
+    window.addEventListener('resize', updateHint)
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', updateHint)
+    }
+  }, [open, feature, timeSeries])
+
+  const onContentScroll = () => {
+    const content = contentRef.current
+    if (!content) {
+      return
+    }
+    const hasOverflow = content.scrollHeight - content.clientHeight > 16
+    const nearTop = content.scrollTop < 20
+    setShowScrollHint(hasOverflow && nearTop)
+  }
+
   return (
     <aside
       className={`station-drawer${open ? ' station-drawer--open' : ''}`}
@@ -72,13 +107,20 @@ export default function StationDetailDrawer({
       >
         {UI_TEXT.drawer.closeSymbol}
       </button>
-      <div className="station-drawer-content">
+      <div
+        ref={contentRef}
+        className="station-drawer-content"
+        onScroll={onContentScroll}
+      >
         <StationDetail
           feature={feature}
           timeSeries={timeSeries}
           currentYear={currentYear}
           showBackButton={false}
         />
+        <div className={`station-drawer-scroll-hint${showScrollHint ? ' station-drawer-scroll-hint--visible' : ''}`}>
+          Scroll for full station history ↓
+        </div>
       </div>
     </aside>
   )

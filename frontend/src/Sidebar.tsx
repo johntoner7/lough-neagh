@@ -28,6 +28,11 @@ export default function Sidebar({
 }: Props) {
   const isBaselineYear = year === 1990
 
+  const narration =
+    year >= 1990 && year <= 1998 ? UI_TEXT.sidebar.narrationSewage :
+    year >= 2005 && year <= 2024 ? UI_TEXT.sidebar.narrationStalled :
+    null
+
   return (
     <aside className={`sidebar${sidebarOpen ? '' : ' sidebar--collapsed'}`} style={{ height: '100vh' }}>
       {/* ── Header — always visible ── */}
@@ -76,10 +81,18 @@ export default function Sidebar({
                     <span>{UI_TEXT.sidebar.noDataForYear}</span>
                   )}
                 </div>
+                {narration && (
+                  <div className="headline-narration">{narration}</div>
+                )}
               </>
             )}
             <div className="headline-hint">{UI_TEXT.sidebar.headlineHint}</div>
           </div>
+        </div>
+
+        {/* ── Sediment callout ── */}
+        <div className="sidebar-section">
+          <div className="sediment-callout">{UI_TEXT.sidebar.sedimentCallout}</div>
         </div>
 
         {/* ── Station visibility mode ── */}
