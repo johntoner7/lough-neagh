@@ -107,7 +107,10 @@ export default function StationDetail({
           </div>
         </div>
       ) : (
-        <div className="detail-loading">{UI_TEXT.stationDetail.chartLoading}</div>
+        <div className="detail-loading">
+          <div className="spinner" />
+          {UI_TEXT.stationDetail.chartLoading}
+        </div>
       )}
     </div>
   )

@@ -46,7 +46,7 @@ export default function SparklinePanel({ allSeries, currentYear }: Props) {
                 yTickStep={sharedTickStep}
               />
             ) : (
-              <div className="sparkline-cell-loading">Loading…</div>
+              <div className="sparkline-cell-loading" />
             )}
           </div>
         )

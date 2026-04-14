@@ -175,7 +175,10 @@ export default function App() {
   if (!token) {
     return (
       <div className="error-screen">
-        <span className="loading-text">{UI_TEXT.app.connecting}</span>
+        <div className="loading-screen">
+          <div className="spinner spinner--lg" />
+          <span>{UI_TEXT.app.connecting}</span>
+        </div>
       </div>
     )
   }
