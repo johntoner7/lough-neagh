@@ -28,11 +28,15 @@ CREATE TABLE IF NOT EXISTS readings (
     station_code        INTEGER REFERENCES stations(station_code),
     reading_date        DATE NOT NULL,
     p_sol_mg_l          FLOAT,
+    p_tot_mg_l          FLOAT,
     no3_n_mg_l          FLOAT,
     no2_n_mg_l          FLOAT,
     below_detection     BOOLEAN DEFAULT FALSE,
     sparse_year         BOOLEAN DEFAULT FALSE
 );
+
+ALTER TABLE readings
+ADD COLUMN IF NOT EXISTS p_tot_mg_l FLOAT;
 
 CREATE TABLE IF NOT EXISTS annual_metrics (
     id                  SERIAL PRIMARY KEY,
@@ -62,8 +66,36 @@ CREATE TABLE IF NOT EXISTS waterbodies (
     geom                GEOMETRY(MULTIPOLYGON, 29902)
 );
 
+CREATE TABLE IF NOT EXISTS lakes (
+    lake_id             TEXT PRIMARY KEY,
+    lake_name           TEXT,
+    ecological_status   TEXT,
+    total_phosphorus    TEXT,
+    label_text          TEXT,
+    geom                GEOMETRY(POLYGON, 29902)
+);
+
+CREATE TABLE IF NOT EXISTS farm_census_wards (
+    id              SERIAL PRIMARY KEY,
+    ward_name       TEXT NOT NULL,
+    ward_code       TEXT NOT NULL,
+    year            INTEGER NOT NULL,
+    num_farms       INTEGER,
+    area_ha         FLOAT,
+    cattle          INTEGER,
+    sheep           INTEGER,
+    pigs            INTEGER,
+    cattle_per_ha   FLOAT,
+    lu_per_ha       FLOAT,
+    geometry        GEOMETRY(POLYGON, 4326),
+    UNIQUE(ward_code, year)
+);
+
 CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
-CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_lakes_geom ON lakes USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom ON farm_census_wards USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year);
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
 """

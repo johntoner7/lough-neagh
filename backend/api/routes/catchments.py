@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from api.db import get_conn
 from api.models import CatchmentSummary, StationProperties
@@ -12,8 +13,9 @@ router = APIRouter(prefix="/catchments", tags=["catchments"])
 
 
 @router.get("", response_model=list[str])
-def list_catchments() -> list[str]:
+def list_catchments(response: Response) -> list[str]:
     """Return distinct catchment names from the stations table."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -26,9 +28,11 @@ def list_catchments() -> list[str]:
 @router.get("/{catchment_name}/summary", response_model=CatchmentSummary)
 def get_catchment_summary(
     catchment_name: str,
+    response: Response,
     year: int = Query(..., description="Year to compute summary for"),
 ) -> CatchmentSummary:
     """Return all stations in a catchment for a year, with aggregate P(SOL) stats."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
     sql = """
         SELECT
             s.station_code,

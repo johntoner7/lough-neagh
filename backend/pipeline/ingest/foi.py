@@ -25,6 +25,7 @@ def load_and_clean_foi(csv_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 	)
 
 	df["P(SOL) (mg/l)"] = pd.to_numeric(df["P(SOL) (mg/l)"], errors="coerce")
+	df["P(TOT) (mg/l)"] = pd.to_numeric(df["P(TOT) (mg/l)"], errors="coerce")
 	df["NO3-N (mg/l)"] = pd.to_numeric(df["NO3-N (mg/l)"], errors="coerce")
 	df["NO2-N (mg/l)"] = pd.to_numeric(df["NO2-N (mg/l)"], errors="coerce")
 	df["Easting"] = pd.to_numeric(df["Easting"], errors="coerce")
@@ -47,6 +48,7 @@ def load_and_clean_foi(csv_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 			"Northing": "northing",
 			"Date": "reading_date",
 			"P(SOL) (mg/l)": "p_sol_mg_l",
+			"P(TOT) (mg/l)": "p_tot_mg_l",
 			"NO3-N (mg/l)": "no3_n_mg_l",
 			"NO2-N (mg/l)": "no2_n_mg_l",
 		}
@@ -75,6 +77,7 @@ def load_and_clean_foi(csv_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 		"reading_date",
 		"year",
 		"p_sol_mg_l",
+		"p_tot_mg_l",
 		"no3_n_mg_l",
 		"no2_n_mg_l",
 		"below_detection",

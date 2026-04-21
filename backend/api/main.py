@@ -2,16 +2,33 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import time
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from api.db import get_conn
-from api.routes import catchments, stations
+from api.db import close_pool, get_conn
+from api.logging_config import configure_logging
+
+configure_logging()
+logger = logging.getLogger(__name__)
+
+from api.routes import catchments, farms, lakes, stations
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("API starting up")
+    yield
+    close_pool()
+    logger.info("Connection pool closed")
+
 
 app = FastAPI(
     title="NI River Phosphorus API",
@@ -21,6 +38,7 @@ app = FastAPI(
         "Mann-Kendall trend direction, and WFD compliance status per station."
     ),
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -30,8 +48,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "%s %s",
+        request.method,
+        request.url.path,
+        extra={
+            "method": request.method,
+            "path": request.url.path,
+            "query": str(request.query_params),
+            "status": response.status_code,
+            "duration_ms": round(duration_ms, 1),
+        },
+    )
+    return response
+
+
 app.include_router(stations.router)
 app.include_router(catchments.router)
+app.include_router(lakes.router)
+app.include_router(farms.router)
 
 
 @app.get("/config")
@@ -49,6 +90,7 @@ def health() -> dict:
                 cur.execute("SELECT 1")
         db_status = "connected"
     except Exception:
+        logger.exception("Database health check failed")
         db_status = "unavailable"
     return {"status": "ok", "database": db_status}
 
@@ -63,6 +105,7 @@ def root() -> dict:
                 row = cur.fetchone()
                 min_year, max_year = (row[0], row[1]) if row and row[0] else (None, None)
     except Exception:
+        logger.exception("Failed to fetch year range")
         min_year, max_year = None, None
 
     return {
@@ -78,6 +121,7 @@ def root() -> dict:
             "years": "/stations/years",
             "catchments": "/catchments",
             "catchment_summary": "/catchments/{catchment_name}/summary?year={year}",
+            "lakes_geojson": "/lakes/geojson",
             "health": "/health",
             "docs": "/docs",
         },

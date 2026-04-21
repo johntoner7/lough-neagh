@@ -83,6 +83,7 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
         "station_code",
         "reading_date",
         "p_sol_mg_l",
+        "p_tot_mg_l",
         "no3_n_mg_l",
         "no2_n_mg_l",
         "below_detection",
@@ -106,3 +107,8 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
 def insert_waterbodies(waterbodies_gdf: gpd.GeoDataFrame, engine) -> None:
     """Insert WFD waterbody polygons into the `waterbodies` table."""
     waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="replace", index=False)
+
+
+def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
+    """Insert lake polygons into the `lakes` table."""
+    lakes_gdf.to_postgis("lakes", engine, if_exists="replace", index=False)

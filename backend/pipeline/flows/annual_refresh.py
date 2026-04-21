@@ -76,7 +76,7 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
         return {"new_readings": 0, "affected_stations": [], "affected_years": []}
 
     columns = [
-        "station_code", "reading_date", "p_sol_mg_l",
+        "station_code", "reading_date", "p_sol_mg_l", "p_tot_mg_l",
         "no3_n_mg_l", "no2_n_mg_l", "below_detection", "sparse_year",
     ]
     insert_df = new_readings_df[columns].copy()

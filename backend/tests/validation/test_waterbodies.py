@@ -11,7 +11,8 @@ from sqlalchemy import create_engine, text
 
 from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.ingest.wfd_sites import load_wfd_sites
-from backend.pipeline.ingest.wfd_waterbodies import insert_waterbodies, load_wfd_waterbodies
+from backend.pipeline.ingest.insert import insert_waterbodies
+from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
 from backend.pipeline.process.join import enrich_stations
 
 

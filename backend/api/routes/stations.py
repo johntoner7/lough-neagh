@@ -7,7 +7,9 @@ from typing import Optional
 
 import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
+from api.constants import WFD_THRESHOLD_MG_L
 from api.db import get_conn
 from api.models import (
     CollectionMetadata,
@@ -22,23 +24,44 @@ router = APIRouter(prefix="/stations", tags=["stations"])
 
 
 @router.get("/years", response_model=list[int])
-def get_years() -> list[int]:
+def get_years(response: Response) -> list[int]:
     """Return the list of years available in the dataset."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT DISTINCT year FROM annual_metrics ORDER BY year")
             return [row[0] for row in cur.fetchall()]
 
 
+def _parse_bbox(bbox: Optional[str]) -> Optional[tuple[float, float, float, float]]:
+    """Parse a bbox query string 'minLon,minLat,maxLon,maxLat' into a float tuple."""
+    if bbox is None:
+        return None
+    parts = bbox.split(",")
+    if len(parts) != 4:
+        raise HTTPException(status_code=422, detail="bbox must be four comma-separated floats: minLon,minLat,maxLon,maxLat")
+    try:
+        return tuple(float(p) for p in parts)  # type: ignore[return-value]
+    except ValueError:
+        raise HTTPException(status_code=422, detail="bbox values must be numeric")
+
+
 @router.get("/geojson", response_model=StationCollection)
 def get_stations_geojson(
+    response: Response,
     year: int = Query(..., description="Year to return annual metrics for"),
     catchment: Optional[str] = Query(None, description="Filter to one named catchment"),
     wfd_matched_only: bool = Query(False, description="Only return WFD-matched stations"),
     with_data_only: bool = Query(False, description="Only return stations with annual data for the selected year"),
     metric: str = Query("annual", pattern="^(annual|rolling)$", description="Metric used for map values: annual or rolling"),
+    bbox: Optional[str] = Query(None, description="Bounding box filter: minLon,minLat,maxLon,maxLat (WGS84)"),
 ) -> StationCollection:
     """Return all stations as a GeoJSON FeatureCollection for a given year."""
+    # Data is updated once a year; year-scoped responses are immutable once published.
+    response.headers["Cache-Control"] = "public, max-age=3600"
+
+    bbox_coords = _parse_bbox(bbox)
+
     sql = """
         SELECT
             s.station_code,
@@ -65,15 +88,19 @@ def get_stations_geojson(
                ON s.station_code = tr.station_code
         WHERE (%(catchment)s IS NULL OR s.catchment_name = %(catchment)s)
           AND (%(wfd_matched_only)s = FALSE OR s.wfd_matched = TRUE)
-                    AND (
-                                %(with_data_only)s = FALSE
-                                OR (
-                                        CASE
-                                            WHEN %(metric)s = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
-                                                ELSE am.annual_mean_p_sol
-                                        END
-                                ) IS NOT NULL
-                    )
+          AND (
+                %(with_data_only)s = FALSE
+                OR (
+                    CASE
+                        WHEN %(metric)s = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                        ELSE am.annual_mean_p_sol
+                    END
+                ) IS NOT NULL
+          )
+          AND (
+                %(bbox)s IS NULL
+                OR ST_Intersects(s.geom, ST_Transform(ST_MakeEnvelope(%(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326), ST_SRID(s.geom)))
+          )
         ORDER BY s.station_code
     """
     with get_conn() as conn:
@@ -86,6 +113,11 @@ def get_stations_geojson(
                     "wfd_matched_only": wfd_matched_only,
                     "with_data_only": with_data_only,
                     "metric": metric,
+                    "bbox": bbox,
+                    "min_lon": bbox_coords[0] if bbox_coords else None,
+                    "min_lat": bbox_coords[1] if bbox_coords else None,
+                    "max_lon": bbox_coords[2] if bbox_coords else None,
+                    "max_lat": bbox_coords[3] if bbox_coords else None,
                 },
             )
             rows = cur.fetchall()
@@ -116,7 +148,7 @@ def get_stations_geojson(
         metric_value = row["metric_p_sol"]
         if metric_value is not None:
             stations_with_data += 1
-            if float(metric_value) > 0.035:
+            if float(metric_value) > WFD_THRESHOLD_MG_L:
                 stations_above_threshold += 1
 
     metadata = CollectionMetadata(
@@ -129,8 +161,9 @@ def get_stations_geojson(
 
 
 @router.get("/{station_code}/timeseries", response_model=StationTimeSeries)
-def get_station_timeseries(station_code: int) -> StationTimeSeries:
+def get_station_timeseries(station_code: int, response: Response) -> StationTimeSeries:
     """Return the full 1990–2024 time series for a single station."""
+    response.headers["Cache-Control"] = "public, max-age=86400"
     station_sql = """
         SELECT
             s.station_code,

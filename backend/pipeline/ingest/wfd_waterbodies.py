@@ -40,8 +40,3 @@ def load_wfd_waterbodies(shp_path: str) -> gpd.GeoDataFrame:
 		output = output.to_crs(epsg=29902)
 
 	return output[["river_waterbody_id", "catchment_name", "geometry"]].copy()
-
-
-def insert_waterbodies(gdf: gpd.GeoDataFrame, engine) -> None:
-	"""Insert waterbodies into PostGIS table `waterbodies` using replacement semantics."""
-	gdf.to_postgis("waterbodies", engine, if_exists="replace", index=False)
