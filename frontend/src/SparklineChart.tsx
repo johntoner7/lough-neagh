@@ -124,6 +124,7 @@ export default function SparklineChart({ series, currentYear, yMax, yTickStep }:
       mode: 'index' as const,
       intersect: false,
     },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [currentYear, labels])
 
   return (

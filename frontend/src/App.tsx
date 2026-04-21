@@ -25,6 +25,7 @@ export default function App() {
   const [year, setYear] = useState(2024)
   const [catchment, setCatchment] = useState('')
   const [showAllStations, setShowAllStations] = useState(true)
+  const [showFarmLayer, setShowFarmLayer] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [stationsData, setStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
   const [keyStationsData, setKeyStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
@@ -109,6 +110,10 @@ export default function App() {
 
   const handleToggleStationView = useCallback(() => {
     setShowAllStations(v => !v)
+  }, [])
+
+  const handleToggleFarmLayer = useCallback(() => {
+    setShowFarmLayer(v => !v)
   }, [])
 
   const handleStationClick = useCallback((feature: StationFeature) => {
@@ -205,9 +210,11 @@ export default function App() {
             <div className="map-container">
               <MapContainer
                 token={token}
+                year={year}
                 stationsData={stationsData}
                 keyStationsData={keyStationsData}
                 selectedFeature={selectedFeature}
+                showFarmLayer={showFarmLayer}
                 onStationClick={handleStationClick}
               />
 
@@ -236,8 +243,10 @@ export default function App() {
             catchment={catchment}
             catchments={catchments}
             showAllStations={showAllStations}
+            showFarmLayer={showFarmLayer}
             onCatchmentChange={handleCatchmentChange}
             onToggleStationView={handleToggleStationView}
+            onToggleFarmLayer={handleToggleFarmLayer}
           />
         </div>
       </section>

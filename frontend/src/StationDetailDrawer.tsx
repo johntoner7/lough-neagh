@@ -76,7 +76,7 @@ export default function StationDetailDrawer({
   }
 
   const onHandleTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (startY.current === null) return
+    if (startY.current === null) {return}
     const delta = event.touches[0].clientY - startY.current
     const offset = delta > 0 ? delta : 0
     dragOffsetRef.current = offset
@@ -104,7 +104,7 @@ export default function StationDetailDrawer({
   }
 
   const onContentTouchMove = (event: TouchEvent<HTMLDivElement>) => {
-    if (startY.current === null) return
+    if (startY.current === null) {return}
     const delta = event.touches[0].clientY - startY.current
     if (delta <= 0) {
       // Scrolling up into content — cancel drag
@@ -119,7 +119,7 @@ export default function StationDetailDrawer({
 
   const onContentScroll = () => {
     const content = contentRef.current
-    if (!content) return
+    if (!content) {return}
     const hasOverflow = content.scrollHeight - content.clientHeight > 16
     const nearTop = content.scrollTop < 20
     setShowScrollHint(hasOverflow && nearTop)

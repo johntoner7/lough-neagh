@@ -8,8 +8,10 @@ interface Props {
   catchment: string
   catchments: string[]
   showAllStations: boolean
+  showFarmLayer: boolean
   onCatchmentChange: (catchment: string) => void
   onToggleStationView: () => void
+  onToggleFarmLayer: () => void
 }
 
 export default function ControlsPanel({
@@ -18,8 +20,10 @@ export default function ControlsPanel({
   catchment,
   catchments,
   showAllStations,
+  showFarmLayer,
   onCatchmentChange,
   onToggleStationView,
+  onToggleFarmLayer,
 }: Props) {
   const isBaselineYear = year === 1990
 
@@ -84,14 +88,14 @@ export default function ControlsPanel({
         <div className="station-toggle-group">
           <button
             className={`station-toggle-btn${!showAllStations ? ' active' : ''}`}
-            onClick={() => { if (showAllStations) onToggleStationView() }}
+            onClick={() => { if (showAllStations) {onToggleStationView()} }}
             type="button"
           >
             6 key stations
           </button>
           <button
             className={`station-toggle-btn${showAllStations ? ' active' : ''}`}
-            onClick={() => { if (!showAllStations) onToggleStationView() }}
+            onClick={() => { if (!showAllStations) {onToggleStationView()} }}
             type="button"
           >
             All stations
@@ -125,6 +129,42 @@ export default function ControlsPanel({
             <span>{UI_TEXT.sidebar.legend.noData}</span>
           </div>
         </div>
+      </div>
+
+      {/* ── Farm layer toggle ── */}
+      <div className="cp-section">
+        <div className="section-label">Cattle density (farm census)</div>
+        <button
+          className={`station-toggle-btn${showFarmLayer ? ' active' : ''}`}
+          onClick={onToggleFarmLayer}
+          type="button"
+          style={{ width: '100%', marginBottom: showFarmLayer ? 8 : 0 }}
+        >
+          {showFarmLayer ? 'Hide layer' : 'Show layer'}
+        </button>
+        {showFarmLayer && (
+          <div>
+            <div className="legend-rows">
+              <div className="legend-row">
+                <span className="legend-dot" style={{ background: '#fef9c3', border: '1px solid #d1d5db' }} />
+                <span>&lt; 0.5 cattle / ha</span>
+              </div>
+              <div className="legend-row">
+                <span className="legend-dot" style={{ background: '#f59e0b' }} />
+                <span>0.5 – 1.5 cattle / ha</span>
+              </div>
+              <div className="legend-row">
+                <span className="legend-dot" style={{ background: '#b45309' }} />
+                <span>1.5 – 2.5 cattle / ha</span>
+              </div>
+              <div className="legend-row">
+                <span className="legend-dot" style={{ background: '#78350f' }} />
+                <span>&gt; 2.5 cattle / ha</span>
+              </div>
+            </div>
+            <div className="legend-note">Syncs to timeline (2015–2024). Hover a ward for details. Areas with more cattle tend to have higher phosphorus levels.</div>
+          </div>
+        )}
       </div>
 
       {/* ── Sediment callout ── */}
