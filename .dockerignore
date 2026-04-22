@@ -24,7 +24,6 @@ data/
 .DS_Store
 
 # Docs and planning
-*.md
 plan.md
 STATUS.md
 
