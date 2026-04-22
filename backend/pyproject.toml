@@ -1,8 +1,7 @@
 [project]
 name = "runoff"
 version = "0.1.0"
-description = "Add your description here"
-readme = "README.md"
+description = "NI River Phosphorus API"
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
