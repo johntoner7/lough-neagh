@@ -8,10 +8,9 @@ interface Props {
   summary: SummaryStats
   catchment: string
   catchments: string[]
-  showAllStations: boolean
   showFarmLayer: boolean
+  onYearChange: (year: number) => void
   onCatchmentChange: (catchment: string) => void
-  onToggleStationView: () => void
   onToggleFarmLayer: () => void
 }
 
@@ -20,10 +19,9 @@ export default function ControlsPanel({
   summary,
   catchment,
   catchments,
-  showAllStations,
   showFarmLayer,
+  onYearChange,
   onCatchmentChange,
-  onToggleStationView,
   onToggleFarmLayer,
 }: Props) {
   const isBaselineYear = year === YEAR_MIN
@@ -35,143 +33,89 @@ export default function ControlsPanel({
 
   return (
     <aside className="controls-panel">
+      <div className="cp-section cp-controls-cluster">
+        <div className="section-label">Map controls</div>
+        <div className="cp-control-item">
+          <div className="cp-control-label">Year</div>
+          <select
+            className="select-input"
+            value={String(year)}
+            onChange={e => onYearChange(Number(e.target.value))}
+          >
+            {Array.from({ length: YEAR_MAX - YEAR_MIN + 1 }, (_, i) => YEAR_MAX - i).map(y => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
 
-      {/* ── Headline stat ── */}
-      <div className="cp-section cp-headline">
-        {isBaselineYear ? (
-          <>
-            <div className="cp-headline-text cp-headline-text--baseline">
-              {UI_TEXT.sidebar.baselineHeadline}
-            </div>
-            <div className="cp-headline-sub">
-              {UI_TEXT.sidebar.baselineSubline}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="cp-headline-pct">
-              {summary.stationsWithData > 0 ? `${summary.pctAboveThreshold}%` : '—'}
-            </div>
-            <div className="cp-headline-label">{UI_TEXT.sidebar.aboveThresholdLabel}</div>
-            <div className="cp-headline-sub">
-              {summary.stationsWithData > 0 ? (
-                <span>{UI_TEXT.sidebar.aboveThresholdSummary(summary.stationsAboveThreshold, summary.stationsWithData, year)}</span>
-              ) : (
-                <span>{UI_TEXT.sidebar.noDataForYear}</span>
+        <div className="cp-control-item">
+          <div className="cp-control-label">{UI_TEXT.sidebar.farmLayer.title}</div>
+          <button
+            className={`station-toggle-btn${showFarmLayer ? ' active' : ''}`}
+            onClick={onToggleFarmLayer}
+            type="button"
+            style={{ width: '100%' }}
+          >
+            {showFarmLayer ? UI_TEXT.sidebar.farmLayer.hide : UI_TEXT.sidebar.farmLayer.show}
+          </button>
+        </div>
+
+        <div className="cp-control-item">
+          <div className="cp-control-label">{UI_TEXT.sidebar.sections.catchment}</div>
+          <select
+            className="select-input"
+            value={catchment}
+            onChange={e => onCatchmentChange(e.target.value)}
+          >
+            <option value="">{UI_TEXT.sidebar.controls.allCatchments}</option>
+            {catchments.map(name => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+
+      </div>
+
+      <details className="cp-section cp-collapsible" open>
+        <summary className="cp-collapsible-summary">River status summary</summary>
+        <div className="cp-collapsible-body cp-headline">
+          {isBaselineYear ? (
+            <>
+              <div className="cp-headline-text cp-headline-text--baseline">
+                {UI_TEXT.sidebar.baselineHeadline}
+              </div>
+              <div className="cp-headline-sub">
+                {UI_TEXT.sidebar.baselineSubline}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="cp-headline-pct">
+                {summary.stationsWithData > 0 ? `${summary.pctAboveThreshold}%` : '—'}
+              </div>
+              <div className="cp-headline-label">{UI_TEXT.sidebar.aboveThresholdLabel}</div>
+              <div className="cp-headline-sub">
+                {summary.stationsWithData > 0 ? (
+                  <span>{UI_TEXT.sidebar.aboveThresholdSummary(summary.stationsAboveThreshold, summary.stationsWithData, year)}</span>
+                ) : (
+                  <span>{UI_TEXT.sidebar.noDataForYear}</span>
+                )}
+              </div>
+              {narration && (
+                <div className="cp-headline-narration">{narration}</div>
               )}
-            </div>
-            {narration && (
-              <div className="cp-headline-narration">{narration}</div>
-            )}
-          </>
-        )}
-        <div className="cp-headline-hint">{UI_TEXT.sidebar.headlineHint}</div>
-      </div>
-
-      {/* ── Catchment filter ── */}
-      <div className="cp-section">
-        <div className="section-label">{UI_TEXT.sidebar.sections.catchment}</div>
-        <select
-          className="select-input"
-          value={catchment}
-          onChange={e => onCatchmentChange(e.target.value)}
-        >
-          <option value="">{UI_TEXT.sidebar.controls.allCatchments}</option>
-          {catchments.map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* ── Station view toggle ── */}
-      <div className="cp-section">
-        <div className="section-label">{UI_TEXT.sidebar.sections.stationView}</div>
-        <div className="station-toggle-group">
-          <button
-            className={`station-toggle-btn${!showAllStations ? ' active' : ''}`}
-            onClick={() => { if (showAllStations) {onToggleStationView()} }}
-            type="button"
-          >
-            {UI_TEXT.sidebar.controls.keyStations}
-          </button>
-          <button
-            className={`station-toggle-btn${showAllStations ? ' active' : ''}`}
-            onClick={() => { if (!showAllStations) {onToggleStationView()} }}
-            type="button"
-          >
-            {UI_TEXT.sidebar.controls.allStations}
-          </button>
+            </>
+          )}
+          <div className="cp-headline-hint">{UI_TEXT.sidebar.headlineHint}</div>
         </div>
-      </div>
+      </details>
 
-      {/* ── Legend ── */}
-      <div className="cp-section">
-        <div className="section-label">{UI_TEXT.sidebar.sections.concentration}</div>
-        <div className="legend-rows">
-          <div className="legend-row">
-            <span className="legend-dot" style={{ background: '#4ade80' }} />
-            <span>{UI_TEXT.sidebar.legend.belowWfd}</span>
-          </div>
-          <div className="legend-row">
-            <span className="legend-dot" style={{ background: '#fb923c' }} />
-            <span>{UI_TEXT.sidebar.legend.midBand}</span>
-          </div>
-          <div className="legend-row">
-            <span className="legend-dot" style={{ background: '#dc2626' }} />
-            <span>{UI_TEXT.sidebar.legend.highBand}</span>
-          </div>
+      <details className="cp-section cp-collapsible" open>
+        <summary className="cp-collapsible-summary">Why recovery is slow</summary>
+        <div className="cp-collapsible-body">
+          <div className="cp-sediment-callout">{UI_TEXT.sidebar.sedimentCallout}</div>
         </div>
-        <div className="legend-note">
-          {UI_TEXT.sidebar.legend.wfdLimitPrefix} <strong>{UI_TEXT.sidebar.legend.wfdLimitValue}</strong>
-        </div>
-        <div className="legend-rows" style={{ marginTop: 8 }}>
-          <div className="legend-row">
-            <span className="legend-dot" style={{ background: '#cccccc' }} />
-            <span>{UI_TEXT.sidebar.legend.noData}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Farm layer toggle ── */}
-      <div className="cp-section">
-        <div className="section-label">{UI_TEXT.sidebar.farmLayer.title}</div>
-        <button
-          className={`station-toggle-btn${showFarmLayer ? ' active' : ''}`}
-          onClick={onToggleFarmLayer}
-          type="button"
-          style={{ width: '100%', marginBottom: showFarmLayer ? 8 : 0 }}
-        >
-          {showFarmLayer ? UI_TEXT.sidebar.farmLayer.hide : UI_TEXT.sidebar.farmLayer.show}
-        </button>
-        {showFarmLayer && (
-          <div>
-            <div className="legend-rows">
-              <div className="legend-row">
-                <span className="legend-dot" style={{ background: '#fef9c3', border: '1px solid #d1d5db' }} />
-                <span>&lt; 0.5 cattle / ha</span>
-              </div>
-              <div className="legend-row">
-                <span className="legend-dot" style={{ background: '#f59e0b' }} />
-                <span>0.5 – 1.5 cattle / ha</span>
-              </div>
-              <div className="legend-row">
-                <span className="legend-dot" style={{ background: '#b45309' }} />
-                <span>1.5 – 2.5 cattle / ha</span>
-              </div>
-              <div className="legend-row">
-                <span className="legend-dot" style={{ background: '#78350f' }} />
-                <span>&gt; 2.5 cattle / ha</span>
-              </div>
-            </div>
-            <div className="legend-note">{UI_TEXT.sidebar.farmLayer.legendNote}</div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Sediment callout ── */}
-      <div className="cp-section">
-        <div className="cp-sediment-callout">{UI_TEXT.sidebar.sedimentCallout}</div>
-      </div>
+      </details>
 
     </aside>
   )

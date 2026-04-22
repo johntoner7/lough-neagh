@@ -16,7 +16,6 @@ export function useStationsFetch(
   token: string,
   year: number,
   catchment: string,
-  showAllStations: boolean,
 ): StationsFetchState {
   const [stationsData, setStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
   const [keyStationsData, setKeyStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
@@ -30,8 +29,7 @@ export function useStationsFetch(
         const keyFeatures = data.features.filter(f =>
           KEY_STATION_CODES.has(f.properties.station_code),
         )
-        const visibleFeatures = showAllStations ? data.features : keyFeatures
-        setStationsData({ type: 'FeatureCollection', features: visibleFeatures })
+        setStationsData({ type: 'FeatureCollection', features: data.features })
         setKeyStationsData({ type: 'FeatureCollection', features: keyFeatures })
       })
       .catch(e => {
@@ -40,7 +38,7 @@ export function useStationsFetch(
       })
 
     return () => ctrl.abort()
-  }, [token, year, catchment, showAllStations])
+  }, [token, year, catchment])
 
   return { stationsData, keyStationsData }
 }

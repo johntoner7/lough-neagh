@@ -9,7 +9,7 @@ import Map, {
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { API_BASE } from './api'
-import { FARM_YEAR_MIN, FARM_YEAR_MAX } from './constants'
+import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from './constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from './types'
 import type { ExpressionSpecification } from 'mapbox-gl'
@@ -69,12 +69,39 @@ interface Props {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const cattleColor = [
-  'interpolate', ['linear'], ['coalesce', ['get', 'cattle_per_ha'], 0],
-  0,   '#fde68a',
-  0.75, '#f59e0b',
-  1.25, '#ea580c',
-  1.75, '#9a3412',
-  2.5, '#3b0d01',
+  'step',
+  ['coalesce', ['get', 'cattle_per_ha'], 0],
+  '#4ade80',
+  0.5, '#fb923c',
+  1.5, '#dc2626',
+  2.5, '#991b1b',
+] as unknown as ExpressionSpecification
+
+const stationRadius = [
+  'interpolate', ['exponential', 1.6], ['zoom'],
+  7, 4,
+  8, 6.5,
+  9, 10,
+  10, 14,
+  12, 21,
+] as unknown as ExpressionSpecification
+
+const keyStationRadius = [
+  'interpolate', ['exponential', 1.6], ['zoom'],
+  7, 8,
+  8, 12,
+  9, 17,
+  10, 23,
+  12, 32,
+] as unknown as ExpressionSpecification
+
+const selectedStationRadius = [
+  'interpolate', ['exponential', 1.45], ['zoom'],
+  7, 9,
+  8, 11,
+  9, 14,
+  10, 18,
+  12, 24,
 ] as unknown as ExpressionSpecification
 
 
@@ -196,6 +223,67 @@ export default function MapContainer({
         <div style={{ color: '#6b7280' }}>{farmHover.num_farms} farms</div>
       </div>
     )}
+    <div
+      style={{
+        position: 'absolute',
+        right: 8,
+        bottom: 8,
+        zIndex: 10,
+        background: 'rgba(255,255,255,0.94)',
+        border: '1px solid rgba(17,24,39,0.12)',
+        borderRadius: 8,
+        padding: '8px 9px',
+        fontSize: 'clamp(9.5px,2.6vw,11px)',
+        lineHeight: 1.25,
+        color: '#1f2937',
+        pointerEvents: 'none',
+        width: 'min(210px, calc(100vw - 16px))',
+        maxHeight: showFarmLayer ? '46vh' : '36vh',
+        overflowY: 'auto',
+      }}
+      aria-label="Map legend"
+    >
+      <div style={{ fontWeight: 700, marginBottom: 6 }}>Map key</div>
+      <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (dots)</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80' }} />
+        <span>Low (&lt; 0.035 mg/l)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fb923c' }} />
+        <span>Above limit (0.035–0.1)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#dc2626' }} />
+        <span>High (&gt; 0.1 mg/l)</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#cccccc' }} />
+        <span>No reading</span>
+      </div>
+      {showFarmLayer && (
+        <>
+          <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#4ade80' }} />
+            <span>Low (&lt; 0.5 / ha)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fb923c' }} />
+            <span>Medium (0.5–1.5 / ha)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#dc2626' }} />
+            <span>High (1.5–2.5 / ha)</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#991b1b' }} />
+            <span>Very high (&gt; 2.5 / ha)</span>
+          </div>
+        </>
+      )}
+    </div>
     <Map
       ref={mapRef}
       mapboxAccessToken={token}
@@ -218,15 +306,15 @@ export default function MapContainer({
             type="fill"
             paint={{
               'fill-color': cattleColor,
-              'fill-opacity': 0.65,
+              'fill-opacity': 0.38,
             }}
           />
           <Layer
             id="farm-line"
             type="line"
             paint={{
-              'line-color': '#92400e',
-              'line-opacity': 0.3,
+              'line-color': '#991b1b',
+              'line-opacity': 0.22,
               'line-width': 0.8,
             }}
           />
@@ -234,7 +322,7 @@ export default function MapContainer({
       )}
 
       {/* ── Lake polygons: All WFD lakes with dynamic labels — static context, no interaction ── */}
-      {lakePolygons && (
+      {lakePolygons && year === LAKE_STATUS_YEAR && (
         <Source id="lake-polygons" type="geojson" data={lakePolygons}>
           <Layer
             id="lake-fill"
@@ -281,10 +369,14 @@ export default function MapContainer({
           id="stations-circle"
           type="circle"
           paint={{
-            'circle-radius': 5,
+            'circle-radius': stationRadius,
             'circle-color': stationColor,
             'circle-opacity': 0.85,
-            'circle-stroke-width': 0.5,
+            'circle-stroke-width': [
+              'interpolate', ['linear'], ['zoom'],
+              7, 0.5,
+              13, 1.2,
+            ],
             'circle-stroke-color': 'rgba(255,255,255,0.4)',
           }}
         />
@@ -296,10 +388,14 @@ export default function MapContainer({
           id="key-stations-circle"
           type="circle"
           paint={{
-            'circle-radius': 10,
+            'circle-radius': keyStationRadius,
             'circle-color': stationColor,
             'circle-opacity': 0.95,
-            'circle-stroke-width': 2,
+            'circle-stroke-width': [
+              'interpolate', ['linear'], ['zoom'],
+              7, 1.8,
+              13, 3,
+            ],
             'circle-stroke-color': '#ffffff',
           }}
         />
@@ -335,10 +431,14 @@ export default function MapContainer({
           id="selected-station-highlight"
           type="circle"
           paint={{
-            'circle-radius': 13,
+            'circle-radius': selectedStationRadius,
             'circle-color': stationColor,
             'circle-opacity': 1,
-            'circle-stroke-width': 3,
+            'circle-stroke-width': [
+              'interpolate', ['linear'], ['zoom'],
+              7, 1.8,
+              13, 3,
+            ],
             'circle-stroke-color': '#111827',
           }}
         />

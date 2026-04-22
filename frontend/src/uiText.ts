@@ -22,7 +22,6 @@ export const UI_TEXT = {
     sedimentCallout: 'Even if every river reached compliance today, AFBI scientists estimate it would take around 40 years for Lough Neagh to recover. The phosphorus accumulated over decades is still in the sediment.',
     sections: {
       year: 'Year',
-      stationView: 'Station view',
       catchment: 'Catchment',
       concentration: 'Phosphorus level',
     },
@@ -30,11 +29,7 @@ export const UI_TEXT = {
       play: 'Play',
       pause: 'Pause',
       yearHint: 'Press Play to watch 35 years of change, and where it stopped.',
-      showKeyOnly: 'Show key stations only',
-      showAll: 'Show all stations',
       allCatchments: 'All catchments',
-      keyStations: '6 key stations',
-      allStations: 'All stations',
     },
     farmLayer: {
       title: 'Cattle density (farm census)',

@@ -20,13 +20,12 @@ export default function App() {
 
   const [year, setYear] = useState(YEAR_MAX)
   const [catchment, setCatchment] = useState('')
-  const [showAllStations, setShowAllStations] = useState(true)
   const [showFarmLayer, setShowFarmLayer] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<StationFeature | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const { stationsData, keyStationsData } = useStationsFetch(token, year, catchment, showAllStations)
+  const { stationsData, keyStationsData } = useStationsFetch(token, year, catchment)
   const summary = useSummaryStats(stationsData)
   useYearAnimation(isPlaying, setIsPlaying, setYear)
 
@@ -44,7 +43,6 @@ export default function App() {
 
   const handleCatchmentChange = useCallback((value: string) => {
     setCatchment(value)
-    if (value) setShowAllStations(true)
   }, [])
 
   const handleTogglePlay = useCallback(() => {
@@ -54,7 +52,6 @@ export default function App() {
     })
   }, [year])
 
-  const handleToggleStationView = useCallback(() => setShowAllStations(v => !v), [])
   const handleToggleFarmLayer = useCallback(() => setShowFarmLayer(v => !v), [])
 
   const handleStationClick = useCallback((feature: StationFeature) => {
@@ -73,7 +70,10 @@ export default function App() {
     }
   }, [setTimeSeriesByCode])
 
-  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false)
+    setSelectedFeature(null)
+  }, [])
 
   const allKeySeriesData = useMemo(() => {
     const map = new Map<number, StationTimeSeries>()
@@ -163,10 +163,9 @@ export default function App() {
             summary={summary}
             catchment={catchment}
             catchments={catchments}
-            showAllStations={showAllStations}
             showFarmLayer={showFarmLayer}
+            onYearChange={handleYearChange}
             onCatchmentChange={handleCatchmentChange}
-            onToggleStationView={handleToggleStationView}
             onToggleFarmLayer={handleToggleFarmLayer}
           />
         </div>
