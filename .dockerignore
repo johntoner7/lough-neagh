@@ -1,0 +1,32 @@
+# Version control
+.git
+.gitignore
+
+# Frontend — not needed in the API image
+frontend/
+
+# Raw and processed data files
+data/
+*.csv
+*.lpkx
+*.zip
+
+# Python artefacts
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+**/.venv
+
+# Local config
+.env
+.env.*
+.DS_Store
+
+# Docs and planning
+*.md
+plan.md
+STATUS.md
+
+# Jupyter / notebooks
+*.ipynb

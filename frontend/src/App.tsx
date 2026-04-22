@@ -1,93 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { fetchCatchments, fetchConfig, fetchStations, fetchTimeSeries } from './api'
+import { fetchTimeSeries } from './api'
+import { KEY_STATION_CODES_ORDERED, YEAR_MIN, YEAR_MAX } from './constants'
 import ControlsPanel from './ControlsPanel'
-import MapContainer, { KEY_STATION_CODES } from './MapContainer'
+import { useAppInit } from './hooks/useAppInit'
+import { useStationsFetch } from './hooks/useStationsFetch'
+import { useSummaryStats } from './hooks/useSummaryStats'
+import { useYearAnimation } from './hooks/useYearAnimation'
+import MapContainer from './MapContainer'
 import SparklinePanel from './SparklinePanel'
 import StationDetailDrawer from './StationDetailDrawer'
 import TimelineBar from './TimelineBar'
 import { UI_TEXT } from './uiText'
 
-import type {
-  GeoJSONCollection,
-  StationFeature,
-  StationTimeSeries,
-  SummaryStats,
-} from './types'
-
-const KEY_STATION_CODES_ORDERED = [10212, 10233, 10271, 10328, 10361, 10380]
-
-const EMPTY_COLLECTION: GeoJSONCollection = { type: 'FeatureCollection', features: [] }
+import type { StationFeature, StationTimeSeries } from './types'
 
 export default function App() {
-  const [token, setToken] = useState('')
-  const [catchments, setCatchments] = useState<string[]>([])
-  const [year, setYear] = useState(2024)
+  const { token, catchments, timeSeriesByCode, setTimeSeriesByCode, error } = useAppInit()
+
+  const [year, setYear] = useState(YEAR_MAX)
   const [catchment, setCatchment] = useState('')
   const [showAllStations, setShowAllStations] = useState(true)
   const [showFarmLayer, setShowFarmLayer] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [stationsData, setStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
-  const [keyStationsData, setKeyStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
   const [selectedFeature, setSelectedFeature] = useState<StationFeature | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [timeSeriesByCode, setTimeSeriesByCode] = useState<Record<number, StationTimeSeries>>({})
-  const [error, setError] = useState<string | null>(null)
 
-  const abortRef = useRef<AbortController | null>(null)
+  const { stationsData, keyStationsData } = useStationsFetch(token, year, catchment, showAllStations)
+  const summary = useSummaryStats(stationsData)
+  useYearAnimation(isPlaying, setIsPlaying, setYear)
 
-  // ── Initialise: token, catchments, and all 6 key sparklines ──────────────
-  useEffect(() => {
-    fetchConfig()
-      .then(cfg => setToken(cfg.mapbox_token))
-      .catch(e => setError((e as Error).message))
-    fetchCatchments()
-      .then(setCatchments)
-      .catch(e => console.warn('Could not load catchments:', e))
-    Promise.allSettled(KEY_STATION_CODES_ORDERED.map(code => fetchTimeSeries(code)))
-      .then(results => {
-        const nextSeries: Record<number, StationTimeSeries> = {}
-        results.forEach((result, i) => {
-          if (result.status === 'fulfilled') {
-            nextSeries[KEY_STATION_CODES_ORDERED[i]] = result.value
-          }
-        })
-        setTimeSeriesByCode(prev => ({ ...nextSeries, ...prev }))
-      })
-  }, [])
+  // Ref so handleStationClick always reads the latest cache without depending on it
+  const timeSeriesCacheRef = useRef(timeSeriesByCode)
+  useEffect(() => { timeSeriesCacheRef.current = timeSeriesByCode }, [timeSeriesByCode])
 
-  // ── Load all stations whenever year / catchment changes ───────────────────
-  useEffect(() => {
-    if (!token) {return}
-    abortRef.current?.abort()
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
-
-    fetchStations(year, catchment, /* withDataOnly */ true, 'rolling', ctrl.signal)
-      .then(data => {
-        const keyFeatures = data.features.filter(f =>
-          KEY_STATION_CODES.has(f.properties.station_code),
-        )
-        const visibleFeatures = showAllStations ? data.features : keyFeatures
-        setStationsData({ type: 'FeatureCollection', features: visibleFeatures })
-        setKeyStationsData({ type: 'FeatureCollection', features: keyFeatures })
-      })
-      .catch(e => {
-        if ((e as Error).name !== 'AbortError') {console.warn('Station fetch error:', e)}
-      })
-  }, [token, year, catchment, showAllStations])
-
-  // ── Play animation ────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isPlaying) {return}
-    const timer = setInterval(() => {
-      setYear(y => {
-        if (y >= 2024) { setIsPlaying(false); return y }
-        return y + 1
-      })
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [isPlaying])
+  // Tracks codes with a fetch already in flight to prevent duplicate requests
+  const inflightCodes = useRef(new Set<number>())
 
   const handleYearChange = useCallback((y: number) => {
     setIsPlaying(false)
@@ -96,74 +44,42 @@ export default function App() {
 
   const handleCatchmentChange = useCallback((value: string) => {
     setCatchment(value)
-    if (value) {
-      setShowAllStations(true)
-    }
+    if (value) setShowAllStations(true)
   }, [])
 
   const handleTogglePlay = useCallback(() => {
     setIsPlaying(p => {
-      if (!p && year === 2024) {setYear(1990)}
+      if (!p && year === YEAR_MAX) setYear(YEAR_MIN)
       return !p
     })
   }, [year])
 
-  const handleToggleStationView = useCallback(() => {
-    setShowAllStations(v => !v)
-  }, [])
-
-  const handleToggleFarmLayer = useCallback(() => {
-    setShowFarmLayer(v => !v)
-  }, [])
+  const handleToggleStationView = useCallback(() => setShowAllStations(v => !v), [])
+  const handleToggleFarmLayer = useCallback(() => setShowFarmLayer(v => !v), [])
 
   const handleStationClick = useCallback((feature: StationFeature) => {
     setSelectedFeature(feature)
     setDrawerOpen(true)
 
     const code = feature.properties.station_code
-    if (!timeSeriesByCode[code]) {
+    if (!timeSeriesCacheRef.current[code] && !inflightCodes.current.has(code)) {
+      inflightCodes.current.add(code)
       fetchTimeSeries(code)
         .then(ts => {
-          setTimeSeriesByCode(prev => {
-            if (prev[code]) {
-              return prev
-            }
-            return { ...prev, [code]: ts }
-          })
+          setTimeSeriesByCode(prev => prev[code] ? prev : { ...prev, [code]: ts })
         })
         .catch(e => console.warn(`Timeseries fetch error for station ${code}:`, e))
+        .finally(() => inflightCodes.current.delete(code))
     }
-  }, [timeSeriesByCode])
+  }, [setTimeSeriesByCode])
 
-  const closeDrawer = useCallback(() => {
-    setDrawerOpen(false)
-  }, [])
-
-  const summary = useMemo((): SummaryStats => {
-    const features = stationsData.features
-    const withData = features.filter(f => f.properties.metric_p_sol !== null)
-    const aboveThreshold = withData.filter(f => (f.properties.metric_p_sol ?? 0) >= 0.035)
-    const pct = withData.length > 0
-      ? Math.round((aboveThreshold.length / withData.length) * 100)
-      : 0
-    const mean = withData.length > 0
-      ? (withData.reduce((s, f) => s + (f.properties.metric_p_sol ?? 0), 0) / withData.length).toFixed(3)
-      : '—'
-    return {
-      stationsWithData: withData.length,
-      stationsAboveThreshold: aboveThreshold.length,
-      pctAboveThreshold: pct,
-      networkMean: mean,
-    }
-  }, [stationsData])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
 
   const allKeySeriesData = useMemo(() => {
     const map = new Map<number, StationTimeSeries>()
     for (const code of KEY_STATION_CODES_ORDERED) {
       const series = timeSeriesByCode[code]
-      if (series) {
-        map.set(code, series)
-      }
+      if (series) map.set(code, series)
     }
     return map
   }, [timeSeriesByCode])
@@ -171,8 +87,13 @@ export default function App() {
   if (error) {
     return (
       <div className="error-screen">
-        <span>{UI_TEXT.app.errorPrefix} {error}</span>
-        <p>{UI_TEXT.app.apiRunningHint} <code>{UI_TEXT.app.apiRunCommand}</code></p>
+        <div className="loading-screen">
+          <span className="error-screen__title">{UI_TEXT.app.errorTitle}</span>
+          <p className="error-screen__message">{error}</p>
+          <button className="error-screen__retry" onClick={() => window.location.reload()}>
+            {UI_TEXT.app.errorRetry}
+          </button>
+        </div>
       </div>
     )
   }
@@ -251,10 +172,7 @@ export default function App() {
         </div>
       </section>
 
-      <TimelineBar
-        year={year}
-        onYearChange={handleYearChange}
-      />
+      <TimelineBar year={year} onYearChange={handleYearChange} />
 
       <SparklinePanel allSeries={allKeySeriesData} currentYear={year} />
 
@@ -268,9 +186,9 @@ export default function App() {
       <div className="floating-player">
         <button
           className="player-btn player-step"
-          onClick={() => handleYearChange(Math.max(1990, year - 1))}
+          onClick={() => handleYearChange(Math.max(YEAR_MIN, year - 1))}
           type="button"
-          disabled={year <= 1990}
+          disabled={year <= YEAR_MIN}
           aria-label="Previous year"
         >
           ‹
@@ -289,9 +207,9 @@ export default function App() {
         <div className="player-divider" />
         <button
           className="player-btn player-step"
-          onClick={() => handleYearChange(Math.min(2024, year + 1))}
+          onClick={() => handleYearChange(Math.min(YEAR_MAX, year + 1))}
           type="button"
-          disabled={year >= 2024}
+          disabled={year >= YEAR_MAX}
           aria-label="Next year"
         >
           ›
