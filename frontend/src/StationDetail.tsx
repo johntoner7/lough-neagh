@@ -1,3 +1,4 @@
+import { WFD_THRESHOLD } from './constants'
 import SparklineChart from './SparklineChart'
 import { UI_TEXT } from './uiText'
 
@@ -47,7 +48,7 @@ export default function StationDetail({
     ? (currentYearPoint.rolling_mean_5yr ?? currentYearPoint.annual_mean_p_sol)
     : p.metric_p_sol
   const hasData = typeof currentReading === 'number'
-  const compliant = hasData ? currentReading <= 0.035 : null
+  const compliant = hasData ? currentReading <= WFD_THRESHOLD : null
   const isSparseYear = currentYearPoint ? currentYearPoint.sparse_year : Boolean(p.sparse_year)
 
   return (

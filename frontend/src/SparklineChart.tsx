@@ -7,10 +7,12 @@ import {
   Tooltip,
   Filler,
 } from 'chart.js'
+import type { ChartOptions, TooltipItem } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
 import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
 
+import { WFD_THRESHOLD } from './constants'
 import { UI_TEXT } from './uiText'
 
 import type { TimeSeriesPoint } from './types'
@@ -60,7 +62,7 @@ export default function SparklineChart({ series, currentYear, yMax, yTickStep }:
     ],
   }), [series, labels])
 
-  const options = useMemo(() => ({
+  const options = useMemo((): ChartOptions<'line'> => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -69,7 +71,7 @@ export default function SparklineChart({ series, currentYear, yMax, yTickStep }:
         mode: 'index' as const,
         intersect: false,
         callbacks: {
-          label: (ctx: { dataset: { label?: string }; parsed: { y: number | null } }) => {
+          label: (ctx: TooltipItem<'line'>) => {
             const v = ctx.parsed.y
             return `${ctx.dataset.label}: ${v !== null ? v.toFixed(3) : '—'} ${UI_TEXT.sparkline.tooltipUnit}`
           },
@@ -79,8 +81,8 @@ export default function SparklineChart({ series, currentYear, yMax, yTickStep }:
         annotations: {
           threshold: {
             type: 'line' as const,
-            yMin: 0.035,
-            yMax: 0.035,
+            yMin: WFD_THRESHOLD,
+            yMax: WFD_THRESHOLD,
             borderColor: '#fd8d3c',
             borderWidth: 1,
             borderDash: [4, 4],
@@ -124,12 +126,11 @@ export default function SparklineChart({ series, currentYear, yMax, yTickStep }:
       mode: 'index' as const,
       intersect: false,
     },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [currentYear, labels])
+  }), [currentYear, labels, yMax, yTickStep])
 
   return (
     <div style={{ height: 130, width: '100%' }}>
-      <Line data={data} options={options as never} />
+      <Line data={data} options={options} />
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { YEAR_MAX, YEAR_MIN } from './constants'
 import { UI_TEXT } from './uiText'
 
 import type { SummaryStats } from './types'
@@ -25,11 +26,11 @@ export default function ControlsPanel({
   onToggleStationView,
   onToggleFarmLayer,
 }: Props) {
-  const isBaselineYear = year === 1990
+  const isBaselineYear = year === YEAR_MIN
 
   const narration =
-    year >= 1990 && year <= 1998 ? UI_TEXT.sidebar.narrationSewage :
-    year >= 2005 && year <= 2024 ? UI_TEXT.sidebar.narrationStalled :
+    year >= YEAR_MIN && year <= 1998 ? UI_TEXT.sidebar.narrationSewage :
+    year >= 2005 && year <= YEAR_MAX ? UI_TEXT.sidebar.narrationStalled :
     null
 
   return (
@@ -91,14 +92,14 @@ export default function ControlsPanel({
             onClick={() => { if (showAllStations) {onToggleStationView()} }}
             type="button"
           >
-            6 key stations
+            {UI_TEXT.sidebar.controls.keyStations}
           </button>
           <button
             className={`station-toggle-btn${showAllStations ? ' active' : ''}`}
             onClick={() => { if (!showAllStations) {onToggleStationView()} }}
             type="button"
           >
-            All stations
+            {UI_TEXT.sidebar.controls.allStations}
           </button>
         </div>
       </div>
@@ -133,14 +134,14 @@ export default function ControlsPanel({
 
       {/* ── Farm layer toggle ── */}
       <div className="cp-section">
-        <div className="section-label">Cattle density (farm census)</div>
+        <div className="section-label">{UI_TEXT.sidebar.farmLayer.title}</div>
         <button
           className={`station-toggle-btn${showFarmLayer ? ' active' : ''}`}
           onClick={onToggleFarmLayer}
           type="button"
           style={{ width: '100%', marginBottom: showFarmLayer ? 8 : 0 }}
         >
-          {showFarmLayer ? 'Hide layer' : 'Show layer'}
+          {showFarmLayer ? UI_TEXT.sidebar.farmLayer.hide : UI_TEXT.sidebar.farmLayer.show}
         </button>
         {showFarmLayer && (
           <div>
@@ -162,7 +163,7 @@ export default function ControlsPanel({
                 <span>&gt; 2.5 cattle / ha</span>
               </div>
             </div>
-            <div className="legend-note">Syncs to timeline (2015–2024). Hover a ward for details. Areas with more cattle tend to have higher phosphorus levels.</div>
+            <div className="legend-note">{UI_TEXT.sidebar.farmLayer.legendNote}</div>
           </div>
         )}
       </div>

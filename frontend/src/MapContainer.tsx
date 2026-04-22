@@ -9,6 +9,7 @@ import Map, {
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { API_BASE } from './api'
+import { FARM_YEAR_MIN, FARM_YEAR_MAX } from './constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from './types'
 import type { ExpressionSpecification } from 'mapbox-gl'
@@ -76,8 +77,6 @@ const cattleColor = [
   2.5, '#3b0d01',
 ] as unknown as ExpressionSpecification
 
-const FARM_MIN_YEAR = 2015
-const FARM_MAX_YEAR = 2024
 
 export default function MapContainer({
   token,
@@ -92,32 +91,36 @@ export default function MapContainer({
   const [lakePolygons, setLakePolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
+  const [farmLayerError, setFarmLayerError] = useState(false)
 
   useEffect(() => {
     fetch(`${API_BASE}/lakes/geojson`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) {setLakePolygons(data as GeoJSON.FeatureCollection)} })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => setLakePolygons(data as GeoJSON.FeatureCollection))
       .catch(err => console.error('Failed to fetch lakes:', err))
   }, [])
 
   useEffect(() => {
-    if (!showFarmLayer) {return}
-    const farmYear = Math.max(FARM_MIN_YEAR, Math.min(FARM_MAX_YEAR, year))
+    if (!showFarmLayer) { setFarmLayerError(false); return }
+    const farmYear = Math.max(FARM_YEAR_MIN, Math.min(FARM_YEAR_MAX, year))
     fetch(`${API_BASE}/farms/geojson?year=${farmYear}`)
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) {setFarmPolygons(data as GeoJSON.FeatureCollection)} })
-      .catch(err => console.error('Failed to fetch farms:', err))
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => { setFarmPolygons(data as GeoJSON.FeatureCollection); setFarmLayerError(false) })
+      .catch(err => { console.error('Failed to fetch farms:', err); setFarmLayerError(true) })
   }, [year, showFarmLayer])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
     const feature = e.features?.[0]
-    if (!feature) {return}
-    const props = feature.properties as StationFeature['properties']
-    onStationClick(
-      { ...feature, properties: props } as unknown as StationFeature,
-      { x: e.point.x, y: e.point.y },
-    )
-  }, [onStationClick])
+    if (!feature) return
+    // mapbox-gl coerces boolean/null properties when returning rendered features,
+    // so we extract only the station_code and look up the clean object from stationsData
+    const code = feature.properties?.station_code
+    if (typeof code !== 'number') return
+    const match = stationsData.features.find(f => f.properties.station_code === code)
+      ?? keyStationsData.features.find(f => f.properties.station_code === code)
+    if (!match) return
+    onStationClick(match, { x: e.point.x, y: e.point.y })
+  }, [onStationClick, stationsData, keyStationsData])
 
   const handleMouseMove = useCallback((e: MapMouseEvent) => {
     if (!showFarmLayer || !mapRef.current) {
@@ -150,6 +153,25 @@ export default function MapContainer({
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    {showFarmLayer && farmLayerError && (
+      <div style={{
+        position: 'absolute',
+        bottom: 12,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10,
+        background: 'rgba(254,243,199,0.97)',
+        border: '1px solid #d97706',
+        borderRadius: 6,
+        padding: '6px 12px',
+        fontSize: 12,
+        color: '#92400e',
+        pointerEvents: 'none',
+        whiteSpace: 'nowrap',
+      }}>
+        Farm layer unavailable — data could not be loaded
+      </div>
+    )}
     {farmHover && (
       <div style={{
         position: 'absolute',

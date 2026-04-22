@@ -1,3 +1,4 @@
+import { YEAR_MIN, YEAR_MAX } from './constants'
 import { UI_TEXT } from './uiText'
 
 interface Props {
@@ -6,7 +7,7 @@ interface Props {
 }
 
 export default function TimelineBar({ year, onYearChange }: Props) {
-  const sliderPct = ((year - 1990) / (2024 - 1990)) * 100
+  const sliderPct = ((year - YEAR_MIN) / (YEAR_MAX - YEAR_MIN)) * 100
   const sliderBg = `linear-gradient(to right, var(--accent) ${sliderPct}%, var(--surface-hi) ${sliderPct}%)`
 
   return (
@@ -31,16 +32,16 @@ export default function TimelineBar({ year, onYearChange }: Props) {
 
         <input
           type="range"
-          min={1990}
-          max={2024}
+          min={YEAR_MIN}
+          max={YEAR_MAX}
           value={year}
           style={{ background: sliderBg }}
           onChange={e => onYearChange(Number(e.target.value))}
         />
 
         <div className="timeline-range-labels">
-          <span>1990</span>
-          <span>2024</span>
+          <span>{YEAR_MIN}</span>
+          <span>{YEAR_MAX}</span>
         </div>
       </div>
     </div>
