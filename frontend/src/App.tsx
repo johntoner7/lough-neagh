@@ -199,7 +199,7 @@ export default function App() {
           type="button"
           aria-label={isPlaying ? UI_TEXT.sidebar.controls.pause : UI_TEXT.sidebar.controls.play}
         >
-          {isPlaying ? '⏸' : '▶'}
+          {isPlaying ? '⏸\uFE0E' : '▶'}
         </button>
         <div className="player-divider" />
         <span className="player-year">{year}</span>
