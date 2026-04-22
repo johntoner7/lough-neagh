@@ -119,6 +119,7 @@ export default function MapContainer({
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
+  const [legendOpen, setLegendOpen] = useState(true)
 
   useEffect(() => {
     fetch(`${API_BASE}/lakes/geojson`)
@@ -232,56 +233,79 @@ export default function MapContainer({
         background: 'rgba(255,255,255,0.94)',
         border: '1px solid rgba(17,24,39,0.12)',
         borderRadius: 8,
-        padding: '8px 9px',
         fontSize: 'clamp(9.5px,2.6vw,11px)',
         lineHeight: 1.25,
         color: '#1f2937',
         pointerEvents: 'none',
         width: 'min(210px, calc(100vw - 16px))',
-        maxHeight: showFarmLayer ? '46vh' : '36vh',
-        overflowY: 'auto',
       }}
       aria-label="Map legend"
     >
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>Map key</div>
-      <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (dots)</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80' }} />
-        <span>Low (&lt; 0.035 mg/l)</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fb923c' }} />
-        <span>Above limit (0.035–0.1)</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#dc2626' }} />
-        <span>High (&gt; 0.1 mg/l)</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
-        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#cccccc' }} />
-        <span>No reading</span>
-      </div>
-      {showFarmLayer && (
-        <>
-          <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
+      <button
+        onClick={() => setLegendOpen(v => !v)}
+        aria-expanded={legendOpen}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          padding: '7px 9px',
+          background: 'none',
+          border: 'none',
+          borderBottom: legendOpen ? '1px solid rgba(17,24,39,0.08)' : 'none',
+          cursor: 'pointer',
+          fontWeight: 700,
+          fontSize: 'inherit',
+          color: '#1f2937',
+          pointerEvents: 'auto',
+          borderRadius: legendOpen ? '8px 8px 0 0' : 8,
+        }}
+      >
+        <span>Map key</span>
+        <span style={{ fontSize: 10, color: '#888', marginLeft: 6 }}>{legendOpen ? '▾' : '▸'}</span>
+      </button>
+      {legendOpen && (
+        <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
+          <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (dots)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#4ade80' }} />
-            <span>Low (&lt; 0.5 / ha)</span>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+            <span>Low (&lt; 0.035 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fb923c' }} />
-            <span>Medium (0.5–1.5 / ha)</span>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fb923c', flexShrink: 0 }} />
+            <span>Above limit (0.035–0.1)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#dc2626' }} />
-            <span>High (1.5–2.5 / ha)</span>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+            <span>High (&gt; 0.1 mg/l)</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: '#991b1b' }} />
-            <span>Very high (&gt; 2.5 / ha)</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#cccccc', flexShrink: 0 }} />
+            <span>No reading</span>
           </div>
-        </>
+          {showFarmLayer && (
+            <>
+              <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#4ade80', flexShrink: 0 }} />
+                <span>Low (&lt; 0.5 / ha)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fb923c', flexShrink: 0 }} />
+                <span>Medium (0.5–1.5 / ha)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#dc2626', flexShrink: 0 }} />
+                <span>High (1.5–2.5 / ha)</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#991b1b', flexShrink: 0 }} />
+                <span>Very high (&gt; 2.5 / ha)</span>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
     <Map
