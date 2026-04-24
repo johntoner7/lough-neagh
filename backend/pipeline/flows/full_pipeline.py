@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from prefect import flow, task
-
 # Repo root: works regardless of cwd (local dev or Docker /app)
 _REPO_ROOT = Path(__file__).parents[3]
 _DATA_RAW = _REPO_ROOT / "data" / "raw"
@@ -46,7 +44,6 @@ except ModuleNotFoundError:
     )
 
 
-@task
 def load_sources() -> tuple:
     foi_path = str(_DATA_RAW / "foi" / "annex_a.csv")
     wfd_sites_path = str(next((_DATA_RAW / "wfd_sites").glob("*.geojson")))
@@ -61,7 +58,6 @@ def load_sources() -> tuple:
     return waterbodies, lakes, enriched, readings_df
 
 
-@task
 def persist_data(waterbodies, lakes, enriched, readings_df) -> dict[str, int]:
     database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
     engine = create_engine(database_url)
@@ -79,14 +75,12 @@ def persist_data(waterbodies, lakes, enriched, readings_df) -> dict[str, int]:
     }
 
 
-@task
 def ingest_farms(engine_url: str) -> dict[str, int]:
     engine = create_engine(engine_url)
     n = insert_farm_census(engine)
     return {"farm_ward_years": n}
 
 
-@task
 def compute_metrics(engine_url: str) -> dict[str, int]:
     engine = create_engine(engine_url)
 
@@ -103,9 +97,8 @@ def compute_metrics(engine_url: str) -> dict[str, int]:
     }
 
 
-@flow(name="phosphorus-full-pipeline")
 def run_full_pipeline() -> dict[str, int]:
-    """Orchestrate full ingestion and metrics computation."""
+    """Ingest all sources and compute derived metrics."""
     waterbodies, lakes, enriched, readings_df = load_sources()
     persist_summary = persist_data(waterbodies, lakes, enriched, readings_df)
 
