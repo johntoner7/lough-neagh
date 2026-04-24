@@ -118,10 +118,18 @@ def insert_farm_census(engine) -> int:
     """Truncate and reload farm_census_wards table. Returns row count inserted."""
     gdf = load_farm_census()
 
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY"))
+    with engine.connect() as conn:
+        table_exists = conn.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'farm_census_wards')"
+        )).scalar()
 
-    gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False)
+    if table_exists:
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY"))
+        gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False)
+    else:
+        gdf.to_postgis("farm_census_wards", engine, if_exists="replace", index=False)
+
     return len(gdf)
 
 

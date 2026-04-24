@@ -57,11 +57,17 @@ def get_farms_geojson(
         ORDER BY ward_name
     """
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, {"year": census_year})
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, {"year": census_year})
+                rows = cur.fetchall()
+                cols = [desc[0] for desc in cur.description]
+    except Exception:
+        return FarmCollection(
+            features=[],
+            metadata=FarmCollectionMetadata(year=census_year),
+        )
 
     features = []
     for row in rows:
