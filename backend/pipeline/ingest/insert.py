@@ -70,11 +70,13 @@ def insert_stations(enriched_stations_gdf: gpd.GeoDataFrame, engine) -> None:
     stations["easting"] = stations["easting"].astype("Int64")
     stations["northing"] = stations["northing"].astype("Int64")
 
-    with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE readings RESTART IDENTITY;"))
-        connection.execute(text("TRUNCATE TABLE stations RESTART IDENTITY CASCADE;"))
-
-    stations.to_postgis("stations", engine, if_exists="append", index=False)
+    if _table_exists(engine, "stations"):
+        with engine.begin() as connection:
+            connection.execute(text("TRUNCATE TABLE readings RESTART IDENTITY;"))
+            connection.execute(text("TRUNCATE TABLE stations RESTART IDENTITY CASCADE;"))
+        stations.to_postgis("stations", engine, if_exists="append", index=False)
+    else:
+        stations.to_postgis("stations", engine, if_exists="replace", index=False)
 
 
 def insert_readings(readings_df: pd.DataFrame, engine) -> None:
@@ -104,15 +106,28 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
     )
 
 
+def _table_exists(engine, table: str) -> bool:
+    with engine.connect() as conn:
+        return conn.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = :t)"
+        ), {"t": table}).scalar()
+
+
 def insert_waterbodies(waterbodies_gdf: gpd.GeoDataFrame, engine) -> None:
     """Insert WFD waterbody polygons into the `waterbodies` table."""
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY"))
-    waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False)
+    if _table_exists(engine, "waterbodies"):
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY"))
+        waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False)
+    else:
+        waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="replace", index=False)
 
 
 def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
     """Insert lake polygons into the `lakes` table."""
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY"))
-    lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False)
+    if _table_exists(engine, "lakes"):
+        with engine.begin() as conn:
+            conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY"))
+        lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False)
+    else:
+        lakes_gdf.to_postgis("lakes", engine, if_exists="replace", index=False)
