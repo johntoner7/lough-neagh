@@ -91,7 +91,8 @@ def _run_pipeline_background() -> None:
     except Exception as exc:
         logger.exception("Pipeline run failed")
         _pipeline_state["status"] = "error"
-        _pipeline_state["error"] = str(exc)
+        # Truncate to first line — full exc includes entire SQL batch + parameters
+        _pipeline_state["error"] = str(exc).splitlines()[0][:300]
     finally:
         _pipeline_state["last_run"] = datetime.datetime.utcnow().isoformat()
 
