@@ -7,6 +7,7 @@ import os
 from prefect import flow, task
 from sqlalchemy import create_engine
 
+from backend.pipeline.ingest.farm_census import insert_farm_census
 from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
 from backend.pipeline.ingest.lakes import load_lakes
@@ -63,6 +64,13 @@ def persist_data(waterbodies, lakes, enriched, readings_df) -> dict[str, int]:
 
 
 @task
+def ingest_farms(engine_url: str) -> dict[str, int]:
+    engine = create_engine(engine_url)
+    n = insert_farm_census(engine)
+    return {"farm_ward_years": n}
+
+
+@task
 def compute_metrics(engine_url: str) -> dict[str, int]:
     engine = create_engine(engine_url)
 
@@ -87,10 +95,12 @@ def run_full_pipeline() -> dict[str, int]:
 
     database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
     metrics_summary = compute_metrics(database_url)
+    farm_summary = ingest_farms(database_url)
 
     return {
         **persist_summary,
         **metrics_summary,
+        **farm_summary,
     }
 
 

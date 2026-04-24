@@ -17,5 +17,4 @@ frontend/.vite/
 
 # Local data and runtime files
 .env
-data/raw/
-data/processed/
+data/

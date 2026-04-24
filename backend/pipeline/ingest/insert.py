@@ -106,9 +106,13 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
 
 def insert_waterbodies(waterbodies_gdf: gpd.GeoDataFrame, engine) -> None:
     """Insert WFD waterbody polygons into the `waterbodies` table."""
-    waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="replace", index=False)
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY"))
+    waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False)
 
 
 def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
     """Insert lake polygons into the `lakes` table."""
-    lakes_gdf.to_postgis("lakes", engine, if_exists="replace", index=False)
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY"))
+    lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False)

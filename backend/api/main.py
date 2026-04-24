@@ -5,10 +5,11 @@ from __future__ import annotations
 import logging
 import os
 import time
+import threading
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
@@ -44,9 +45,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+# ─── Pipeline run state ───────────────────────────────────────────────────────
+_pipeline_state: dict = {"status": "idle", "last_run": None, "summary": None, "error": None}
 
 
 @app.middleware("http")
@@ -73,6 +77,44 @@ app.include_router(stations.router)
 app.include_router(catchments.router)
 app.include_router(lakes.router)
 app.include_router(farms.router)
+
+
+def _run_pipeline_background() -> None:
+    import datetime
+    from pipeline.flows.full_pipeline import run_full_pipeline
+    _pipeline_state["status"] = "running"
+    _pipeline_state["error"] = None
+    try:
+        summary = run_full_pipeline()
+        _pipeline_state["status"] = "done"
+        _pipeline_state["summary"] = summary
+    except Exception as exc:
+        logger.exception("Pipeline run failed")
+        _pipeline_state["status"] = "error"
+        _pipeline_state["error"] = str(exc)
+    finally:
+        _pipeline_state["last_run"] = datetime.datetime.utcnow().isoformat()
+
+
+@app.post("/admin/pipeline")
+def trigger_pipeline(x_pipeline_secret: str | None = Header(default=None)) -> dict:
+    """Trigger a full pipeline reload. Protected by X-Pipeline-Secret header."""
+    secret = os.environ.get("PIPELINE_SECRET")
+    if not secret or x_pipeline_secret != secret:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Secret header")
+    if _pipeline_state["status"] == "running":
+        return {"accepted": False, "reason": "Pipeline already running"}
+    threading.Thread(target=_run_pipeline_background, daemon=True).start()
+    return {"accepted": True, "message": "Pipeline started — poll /admin/pipeline/status to track progress"}
+
+
+@app.get("/admin/pipeline/status")
+def pipeline_status(x_pipeline_secret: str | None = Header(default=None)) -> dict:
+    """Check the status of the last pipeline run."""
+    secret = os.environ.get("PIPELINE_SECRET")
+    if not secret or x_pipeline_secret != secret:
+        raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Secret header")
+    return _pipeline_state
 
 
 @app.get("/config")

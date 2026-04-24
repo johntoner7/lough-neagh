@@ -5,9 +5,8 @@
 # Frontend — not needed in the API image
 frontend/
 
-# Raw and processed data files
-data/
-*.csv
+# Raw and processed data files — kept so the pipeline can run inside Railway
+# data/
 *.lpkx
 *.zip
 
