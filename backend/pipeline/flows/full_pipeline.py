@@ -7,20 +7,38 @@ import os
 from prefect import flow, task
 from sqlalchemy import create_engine
 
-from backend.pipeline.ingest.farm_census import insert_farm_census
-from backend.pipeline.ingest.foi import load_and_clean_foi
-from backend.pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
-from backend.pipeline.ingest.lakes import load_lakes
-from backend.pipeline.ingest.wfd_sites import load_wfd_sites
-from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
-from backend.pipeline.process.join import enrich_stations
-from backend.pipeline.process.metrics import (
-    compute_annual_means,
-    compute_rolling_means,
-    compute_trend_results,
-    insert_annual_metrics,
-    insert_trend_results,
-)
+try:
+    # Local dev: repo root in PYTHONPATH, backend is a package
+    from backend.pipeline.ingest.farm_census import insert_farm_census
+    from backend.pipeline.ingest.foi import load_and_clean_foi
+    from backend.pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
+    from backend.pipeline.ingest.lakes import load_lakes
+    from backend.pipeline.ingest.wfd_sites import load_wfd_sites
+    from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
+    from backend.pipeline.process.join import enrich_stations
+    from backend.pipeline.process.metrics import (
+        compute_annual_means,
+        compute_rolling_means,
+        compute_trend_results,
+        insert_annual_metrics,
+        insert_trend_results,
+    )
+except ModuleNotFoundError:
+    # Docker: backend/ contents copied directly to /app, no backend package
+    from pipeline.ingest.farm_census import insert_farm_census
+    from pipeline.ingest.foi import load_and_clean_foi
+    from pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
+    from pipeline.ingest.lakes import load_lakes
+    from pipeline.ingest.wfd_sites import load_wfd_sites
+    from pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
+    from pipeline.process.join import enrich_stations
+    from pipeline.process.metrics import (
+        compute_annual_means,
+        compute_rolling_means,
+        compute_trend_results,
+        insert_annual_metrics,
+        insert_trend_results,
+    )
 
 
 def _path_or_fallback(primary: str, fallback: str) -> str:
