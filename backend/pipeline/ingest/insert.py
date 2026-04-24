@@ -99,7 +99,7 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
     readings.to_sql(
         "readings",
         engine,
-        if_exists="append",
+        if_exists="append" if _table_exists(engine, "readings") else "replace",
         index=False,
         chunksize=10_000,
         method="multi",

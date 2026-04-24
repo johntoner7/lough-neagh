@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from prefect import flow, task
+
+# Repo root: works regardless of cwd (local dev or Docker /app)
+_REPO_ROOT = Path(__file__).parents[3]
+_DATA_RAW = _REPO_ROOT / "data" / "raw"
 from sqlalchemy import create_engine
 
 try:
@@ -41,19 +46,12 @@ except ModuleNotFoundError:
     )
 
 
-def _path_or_fallback(primary: str, fallback: str) -> str:
-    return primary if os.path.exists(primary) else fallback
-
-
 @task
 def load_sources() -> tuple:
-    foi_path = _path_or_fallback("data/raw/foi/annex_a.csv", "annex_a.csv")
-    wfd_sites_path = _path_or_fallback(
-        "data/raw/wfd_sites/WFD_River_and_Lake_Monitoring_Sites_-1026036712144107026.geojson",
-        "WFD_River_and_Lake_Monitoring_Sites_-1026036712144107026.geojson",
-    )
-    waterbodies_path = "data/raw/wfd_waterbodies/WFD_River_Water_Bodies_2016.shp"
-    lakes_path = "data/raw/lakes/Lake_Polygon_Classification_Ecological_Status_2024.geojson"
+    foi_path = str(_DATA_RAW / "foi" / "annex_a.csv")
+    wfd_sites_path = str(next((_DATA_RAW / "wfd_sites").glob("*.geojson")))
+    waterbodies_path = str(_DATA_RAW / "wfd_waterbodies" / "WFD_River_Water_Bodies_2016.shp")
+    lakes_path = str(_DATA_RAW / "lakes" / "Lake_Polygon_Classification_Ecological_Status_2024.geojson")
 
     stations_df, readings_df = load_and_clean_foi(foi_path)
     wfd_sites = load_wfd_sites(wfd_sites_path)

@@ -147,10 +147,14 @@ def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
         lambda x: float(x) if pd.notna(x) else None
     )
 
-    with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY;"))
+    table_exists = engine.connect().execute(text(
+        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'annual_metrics')"
+    )).scalar()
+    if table_exists:
+        with engine.begin() as connection:
+            connection.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY;"))
 
-    insert_df.to_sql("annual_metrics", engine, if_exists="append", index=False, chunksize=1000, method="multi")
+    insert_df.to_sql("annual_metrics", engine, if_exists="append" if table_exists else "replace", index=False, chunksize=1000, method="multi")
 
 
 def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
@@ -169,7 +173,11 @@ def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
     )
     insert_df["significant"] = insert_df["significant"].astype("bool")
 
-    with engine.begin() as connection:
-        connection.execute(text("TRUNCATE TABLE trend_results RESTART IDENTITY;"))
+    table_exists = engine.connect().execute(text(
+        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'trend_results')"
+    )).scalar()
+    if table_exists:
+        with engine.begin() as connection:
+            connection.execute(text("TRUNCATE TABLE trend_results RESTART IDENTITY;"))
 
-    insert_df.to_sql("trend_results", engine, if_exists="append", index=False, method="multi")
+    insert_df.to_sql("trend_results", engine, if_exists="append" if table_exists else "replace", index=False, method="multi")
