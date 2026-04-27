@@ -14,7 +14,9 @@ import pandas as pd
 from shapely.geometry import shape
 from sqlalchemy import create_engine, text
 
-_DATA_ROOT = Path(__file__).parents[3] / "data" / "raw" / "farms"
+_LOCAL_ROOT = Path(__file__).parents[3]
+_DOCKER_ROOT = Path(__file__).parents[2]
+_DATA_ROOT = (_LOCAL_ROOT if (_LOCAL_ROOT / "data").exists() else _DOCKER_ROOT) / "data" / "raw" / "farms"
 
 WARDS_GEOJSON = _DATA_ROOT / "osni_open_data_largescale_boundaries_wards_2012.geojson"
 CENSUS_CSV = _DATA_ROOT / "FCWARD.20260420T210410.csv"
