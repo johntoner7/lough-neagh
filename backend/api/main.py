@@ -23,6 +23,24 @@ logger = logging.getLogger(__name__)
 from api.routes import catchments, farms, lakes, stations
 
 
+def _init_db() -> None:
+    """Ensure PostGIS extension and schema tables exist."""
+    from sqlalchemy import create_engine, text
+    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    engine = create_engine(database_url)
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis_topology;"))
+    logger.info("PostGIS extensions ensured")
+
+    try:
+        from scripts.create_tables import main as create_tables
+    except ModuleNotFoundError:
+        from backend.scripts.create_tables import main as create_tables
+    create_tables()
+    logger.info("Schema tables ensured")
+
+
 def _db_is_empty() -> bool:
     try:
         with get_conn() as conn:
@@ -46,6 +64,7 @@ def _seed_in_background() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("API starting up")
+    _init_db()
     if _db_is_empty():
         threading.Thread(target=_seed_in_background, daemon=True).start()
     yield
