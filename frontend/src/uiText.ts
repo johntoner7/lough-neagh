@@ -35,6 +35,7 @@ export const UI_TEXT = {
       title: 'Cattle density (farm census)',
       show: 'Show layer',
       hide: 'Hide layer',
+      loading: 'Loading farm census…',
       legendNote: 'Syncs to timeline (2015–2024). Hover a ward for details. Areas with higher cattle density tend to have higher phosphorus levels.',
     },
     annotations: {

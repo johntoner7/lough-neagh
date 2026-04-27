@@ -115,10 +115,12 @@ export default function MapContainer({
   onStationClick,
 }: Props) {
   const mapRef = useRef<MapRef>(null)
+  const farmFetchIdRef = useRef(0)
   const [lakePolygons, setLakePolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
+  const [farmLayerLoading, setFarmLayerLoading] = useState(false)
   const [legendOpen, setLegendOpen] = useState(true)
 
   useEffect(() => {
@@ -129,12 +131,36 @@ export default function MapContainer({
   }, [])
 
   useEffect(() => {
-    if (!showFarmLayer) { setFarmLayerError(false); return }
+    if (!showFarmLayer) {
+      farmFetchIdRef.current += 1
+      setFarmLayerLoading(false)
+      setFarmLayerError(false)
+      setFarmPolygons(null)
+      return
+    }
+
     const farmYear = Math.max(FARM_YEAR_MIN, Math.min(FARM_YEAR_MAX, year))
+    const fetchId = ++farmFetchIdRef.current
+    setFarmLayerLoading(true)
+    setFarmLayerError(false)
+    setFarmPolygons(null)
+
     fetch(`${API_BASE}/farms/geojson?year=${farmYear}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(data => { setFarmPolygons(data as GeoJSON.FeatureCollection); setFarmLayerError(false) })
-      .catch(err => { console.error('Failed to fetch farms:', err); setFarmLayerError(true) })
+      .then(data => {
+        if (farmFetchIdRef.current !== fetchId) return
+        setFarmPolygons(data as GeoJSON.FeatureCollection)
+        setFarmLayerError(false)
+      })
+      .catch(err => {
+        if (farmFetchIdRef.current !== fetchId) return
+        console.error('Failed to fetch farms:', err)
+        setFarmLayerError(true)
+      })
+      .finally(() => {
+        if (farmFetchIdRef.current !== fetchId) return
+        setFarmLayerLoading(false)
+      })
   }, [year, showFarmLayer])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
@@ -181,6 +207,35 @@ export default function MapContainer({
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    {showFarmLayer && farmLayerLoading && (
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 9,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0.08))',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 14px',
+          borderRadius: 999,
+          background: 'rgba(255,255,255,0.92)',
+          border: '1px solid rgba(17,24,39,0.12)',
+          boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+          color: '#374151',
+          fontSize: 12,
+          fontWeight: 600,
+        }}>
+          <div className="spinner" aria-hidden="true" />
+          <span>{UI_TEXT.sidebar.farmLayer.loading}</span>
+        </div>
+      </div>
+    )}
     {showFarmLayer && farmLayerError && (
       <div style={{
         position: 'absolute',
