@@ -45,7 +45,7 @@ def _db_is_empty() -> bool:
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM stations")
+                cur.execute("SELECT COUNT(*) FROM annual_metrics")
                 return cur.fetchone()[0] == 0
     except Exception:
         return True  # table doesn't exist yet
@@ -119,6 +119,31 @@ app.include_router(farms.router)
 
 
 
+
+
+_seed_lock = threading.Lock()
+_seeding = False
+
+
+@app.post("/seed")
+def trigger_seed() -> dict:
+    """Manually trigger the seed pipeline in the background."""
+    global _seeding
+    with _seed_lock:
+        if _seeding:
+            return {"status": "already_running"}
+        _seeding = True
+
+    def _run():
+        global _seeding
+        try:
+            _seed_in_background()
+        finally:
+            with _seed_lock:
+                _seeding = False
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"status": "started"}
 
 
 @app.get("/config")
