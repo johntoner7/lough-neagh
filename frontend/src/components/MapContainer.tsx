@@ -8,10 +8,10 @@ import Map, {
 } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
-import { API_BASE } from './api'
-import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from './constants'
+import { API_BASE } from '../api'
+import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from '../constants'
 
-import type { GeoJSONCollection, ScreenPoint, StationFeature } from './types'
+import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
 import type { ExpressionSpecification } from 'mapbox-gl'
 
 interface FarmHover {

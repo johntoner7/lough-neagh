@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 
 import SparklineChart from './SparklineChart'
-import { KEY_STATION_CODES_ORDERED } from './constants'
+import { KEY_STATION_CODES_ORDERED } from '../constants'
 
-import type { StationTimeSeries } from './types'
+import type { StationTimeSeries } from '../types'
 
 interface Props {
   allSeries: Map<number, StationTimeSeries>

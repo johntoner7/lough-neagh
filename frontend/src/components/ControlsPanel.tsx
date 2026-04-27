@@ -1,7 +1,7 @@
-import { YEAR_MAX, YEAR_MIN } from './constants'
-import { UI_TEXT } from './uiText'
+import { YEAR_MAX, YEAR_MIN } from '../constants'
+import { UI_TEXT } from '../uiText'
 
-import type { SummaryStats } from './types'
+import type { SummaryStats } from '../types'
 
 interface Props {
   year: number

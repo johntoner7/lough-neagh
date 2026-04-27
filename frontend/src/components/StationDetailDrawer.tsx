@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { useDragToDismiss } from './hooks/useDragToDismiss'
+import { useDragToDismiss } from '../hooks/useDragToDismiss'
 import StationDetail from './StationDetail'
-import { UI_TEXT } from './uiText'
+import { UI_TEXT } from '../uiText'
 
-import type { StationFeature, StationTimeSeries } from './types'
+import type { StationFeature, StationTimeSeries } from '../types'
 
 interface Props {
   open: boolean

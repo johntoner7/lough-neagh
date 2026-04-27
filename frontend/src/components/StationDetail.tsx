@@ -1,8 +1,8 @@
-import { WFD_THRESHOLD } from './constants'
+import { WFD_THRESHOLD } from '../constants'
 import SparklineChart from './SparklineChart'
-import { UI_TEXT } from './uiText'
+import { UI_TEXT } from '../uiText'
 
-import type { StationFeature, StationTimeSeries } from './types'
+import type { StationFeature, StationTimeSeries } from '../types'
 
 // ─── Interpretive text for the 6 key Lough Neagh tributaries ──────────────────
 

@@ -1,5 +1,5 @@
-import { YEAR_MIN, YEAR_MAX } from './constants'
-import { UI_TEXT } from './uiText'
+import { YEAR_MIN, YEAR_MAX } from '../constants'
+import { UI_TEXT } from '../uiText'
 
 interface Props {
   year: number

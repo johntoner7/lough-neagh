@@ -12,10 +12,10 @@ import annotationPlugin from 'chartjs-plugin-annotation'
 import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
 
-import { WFD_THRESHOLD } from './constants'
-import { UI_TEXT } from './uiText'
+import { WFD_THRESHOLD } from '../constants'
+import { UI_TEXT } from '../uiText'
 
-import type { TimeSeriesPoint } from './types'
+import type { TimeSeriesPoint } from '../types'
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler, annotationPlugin,

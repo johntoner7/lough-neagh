@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { fetchStations } from '../api'
-import { KEY_STATION_CODES } from '../MapContainer'
+import { KEY_STATION_CODES } from '../components/MapContainer'
 
 import type { GeoJSONCollection } from '../types'
 
