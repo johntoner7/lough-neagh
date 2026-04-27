@@ -26,15 +26,15 @@ from sqlalchemy import create_engine, text
 DATA_ROOT = Path("data/raw")
 
 REQUIRED_FILES = {
-    "FOI readings":         DATA_ROOT / "foi" / "annex_a.csv",
-    "WFD waterbodies":      DATA_ROOT / "wfd_waterbodies" / "WFD_River_Water_Bodies_2016.shp",
-    "Lake polygons":        DATA_ROOT / "lakes" / "Lake_Polygon_Classification_Ecological_Status_2024.geojson",
-    "Farm census CSV":      DATA_ROOT / "farms" / "FCWARD.20260420T210410.csv",
-    "Ward boundaries":      DATA_ROOT / "farms" / "osni_open_data_largescale_boundaries_wards_2012.geojson",
+    "FOI readings":    DATA_ROOT / "foi" / "annex_a.csv",
+    "WFD waterbodies": DATA_ROOT / "wfd_waterbodies" / "WFD_River_Water_Bodies_2016.shp",
+    "Lake polygons":   DATA_ROOT / "lakes" / "Lake_Polygon_Classification_Ecological_Status_2024.geojson",
+    "Ward boundaries": DATA_ROOT / "farms" / "osni_open_data_largescale_boundaries_wards_2012.geojson",
 }
 
 REQUIRED_DIR_GLOBS = {
     "WFD monitoring sites": (DATA_ROOT / "wfd_sites", "*.geojson"),
+    "Farm census CSV":      (DATA_ROOT / "farms", "FCWARD.*.csv"),
 }
 
 
@@ -73,13 +73,13 @@ def current_row_counts(database_url: str) -> dict[str, int]:
               "waterbodies", "lakes", "farm_census_wards"]
     engine = create_engine(database_url)
     counts = {}
-    with engine.connect() as conn:
-        for table in tables:
-            try:
+    for table in tables:
+        try:
+            with engine.connect() as conn:
                 result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
                 counts[table] = result.scalar()
-            except Exception:
-                counts[table] = -1  # table doesn't exist yet
+        except Exception:
+            counts[table] = -1  # table doesn't exist yet
     return counts
 
 
@@ -151,11 +151,20 @@ def main() -> None:
             print("Aborted.")
             sys.exit(0)
 
+    # ── Initialise schema ─────────────────────────────────────────────────────
+    print("\n=== Initialising schema ===\n")
+
+    from backend.scripts.init_db import main as init_db
+    init_db(database_url)
+
+    from backend.scripts.create_tables import main as create_tables
+    create_tables(database_url)
+
     # ── Run pipeline ──────────────────────────────────────────────────────────
     print("\n=== Running pipeline ===\n")
 
     from backend.pipeline.flows.full_pipeline import run_full_pipeline
-    summary = run_full_pipeline()
+    summary = run_full_pipeline(database_url=database_url)
 
     print("\n=== Pipeline complete ===\n")
     for key, value in summary.items():

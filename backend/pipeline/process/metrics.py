@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 import pandas as pd
 import pymannkendall as mk
-from sqlalchemy import create_engine, text
-
-
-def _database_url() -> str:
-    return os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+from sqlalchemy import text
 
 
 def compute_annual_means(engine) -> pd.DataFrame:
@@ -40,7 +34,7 @@ def compute_annual_means(engine) -> pd.DataFrame:
 def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
     """
     For each station, compute centred 5-year rolling mean of annual_mean_p_sol.
-    Only compute rolling mean for years where we have a complete ±2 year window with data.
+    Only computes where a complete ±2 year window with at least 3 non-sparse years exists.
     """
     annual_df = annual_df.copy()
     annual_df["rolling_mean_5yr"] = None
@@ -49,94 +43,76 @@ def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
         station_data = annual_df[annual_df["station_code"] == station].copy()
         station_data = station_data.sort_values("year").reset_index(drop=True)
 
-        for idx, row in station_data.iterrows():
+        for _, row in station_data.iterrows():
             year = row["year"]
-            window_years = [year - 2, year - 1, year, year + 1, year + 2]
+            window = station_data[station_data["year"].isin(range(year - 2, year + 3))]
 
-            # Check if we can form a complete window (all 5 years should exist in data)
-            window_data = station_data[station_data["year"].isin(window_years)].copy()
-
-            # Only compute rolling mean if we have all 5 years in the window
-            if len(window_data) < 5:
+            if len(window) < 5:
                 continue
 
-            valid_data = window_data[~window_data["sparse_year"]]
+            valid = window[~window["sparse_year"]]
+            if len(valid) < 3:
+                continue
 
-            # Require at least 3 valid (non-sparse) years
-            if len(valid_data) >= 3:
-                rolling_mean = float(valid_data["annual_mean_p_sol"].mean())
-                loc = annual_df[
-                    (annual_df["station_code"] == station) & (annual_df["year"] == year)
-                ].index
-                if not loc.empty:
-                    annual_df.loc[loc[0], "rolling_mean_5yr"] = rolling_mean
+            loc = annual_df[
+                (annual_df["station_code"] == station) & (annual_df["year"] == year)
+            ].index
+            if not loc.empty:
+                annual_df.loc[loc[0], "rolling_mean_5yr"] = float(valid["annual_mean_p_sol"].mean())
 
     return annual_df
 
 
 def compute_trend_results(engine) -> pd.DataFrame:
     """
-    For each station with at least 8 annual means in post-2010 period:
-    - Run Mann-Kendall test
-    - Store trend direction, p-value, Sen slope, significance
+    For each station with at least 8 non-sparse annual means since 2010:
+    run Mann-Kendall test and return trend direction, p-value, and Sen slope.
     """
-    annual_query = """
-    SELECT station_code, year, annual_mean_p_sol, sparse_year
-    FROM annual_metrics
-    WHERE year >= 2010
-    ORDER BY station_code, year
-    """
-    annual_data = pd.read_sql_query(annual_query, engine)
+    annual_data = pd.read_sql_query(
+        """
+        SELECT station_code, year, annual_mean_p_sol, sparse_year
+        FROM annual_metrics
+        WHERE year >= 2010
+        ORDER BY station_code, year
+        """,
+        engine,
+    )
 
     results = []
-
     for station in annual_data["station_code"].unique():
-        station_series = annual_data[annual_data["station_code"] == station].copy()
-        station_series = station_series.sort_values("year")
+        series = annual_data[annual_data["station_code"] == station].sort_values("year")
+        valid = series[~series["sparse_year"]]
 
-        valid_series = station_series[~station_series["sparse_year"]]
-
-        if len(valid_series) >= 8:
-            y = valid_series["annual_mean_p_sol"].values
-            result = mk.original_test(y)
-
-            trend_direction = "increasing" if result.trend == "increasing" else "no trend"
-            if result.trend == "decreasing":
-                trend_direction = "decreasing"
-
-            results.append(
-                {
-                    "station_code": station,
-                    "trend_direction": trend_direction,
-                    "p_value": result.p,
-                    "sens_slope": result.slope,
-                    "significant": result.p < 0.05,
-                    "years_analysed": len(valid_series),
-                }
-            )
+        if len(valid) >= 8:
+            r = mk.original_test(valid["annual_mean_p_sol"].values)
+            direction = r.trend if r.trend in ("increasing", "decreasing") else "no trend"
+            results.append({
+                "station_code": station,
+                "trend_direction": direction,
+                "p_value": r.p,
+                "sens_slope": r.slope,
+                "significant": r.p < 0.05,
+                "years_analysed": len(valid),
+            })
         else:
-            results.append(
-                {
-                    "station_code": station,
-                    "trend_direction": "insufficient data",
-                    "p_value": None,
-                    "sens_slope": None,
-                    "significant": False,
-                    "years_analysed": len(valid_series),
-                }
-            )
+            results.append({
+                "station_code": station,
+                "trend_direction": "insufficient data",
+                "p_value": None,
+                "sens_slope": None,
+                "significant": False,
+                "years_analysed": len(valid),
+            })
 
     return pd.DataFrame(results)
 
 
 def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
-    """Insert computed annual metrics into PostGIS."""
+    """Truncate and reload the annual_metrics table."""
     insert_df = annual_df[[
         "station_code", "year", "annual_mean_p_sol", "reading_count",
-        "sparse_year", "wfd_compliant", "rolling_mean_5yr"
+        "sparse_year", "wfd_compliant", "rolling_mean_5yr",
     ]].copy()
-
-    # Convert numpy types to Python native types
     insert_df["station_code"] = insert_df["station_code"].astype("Int64")
     insert_df["year"] = insert_df["year"].astype("int64")
     insert_df["annual_mean_p_sol"] = insert_df["annual_mean_p_sol"].apply(
@@ -147,23 +123,21 @@ def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
         lambda x: float(x) if pd.notna(x) else None
     )
 
-    table_exists = engine.connect().execute(text(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'annual_metrics')"
-    )).scalar()
-    if table_exists:
-        with engine.begin() as connection:
-            connection.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY;"))
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY;"))
 
-    insert_df.to_sql("annual_metrics", engine, if_exists="append" if table_exists else "replace", index=False, chunksize=1000, method="multi")
+    insert_df.to_sql(
+        "annual_metrics", engine,
+        if_exists="append", index=False, chunksize=1000, method="multi",
+    )
 
 
 def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
-    """Insert trend analysis results into PostGIS."""
+    """Truncate and reload the trend_results table."""
     insert_df = trend_df[[
-        "station_code", "trend_direction", "p_value", "sens_slope", "significant", "years_analysed"
+        "station_code", "trend_direction", "p_value", "sens_slope",
+        "significant", "years_analysed",
     ]].copy()
-
-    # Convert numpy types to Python native types
     insert_df["station_code"] = insert_df["station_code"].astype("int64")
     insert_df["p_value"] = insert_df["p_value"].apply(
         lambda x: float(x) if pd.notna(x) else None
@@ -173,11 +147,10 @@ def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
     )
     insert_df["significant"] = insert_df["significant"].astype("bool")
 
-    table_exists = engine.connect().execute(text(
-        "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'trend_results')"
-    )).scalar()
-    if table_exists:
-        with engine.begin() as connection:
-            connection.execute(text("TRUNCATE TABLE trend_results RESTART IDENTITY;"))
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE trend_results RESTART IDENTITY;"))
 
-    insert_df.to_sql("trend_results", engine, if_exists="append" if table_exists else "replace", index=False, method="multi")
+    insert_df.to_sql(
+        "trend_results", engine,
+        if_exists="append", index=False, method="multi",
+    )

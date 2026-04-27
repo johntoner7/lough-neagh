@@ -282,8 +282,8 @@ def create_small_existing_csv(source_csv: Path, output_csv: Path, nrows: int = 2
                 break
 
 
-def run_prefect_check(results: list[CheckResult]) -> None:
-    print("\n=== 4) Prefect annual refresh check ===")
+def run_annual_refresh_check(results: list[CheckResult]) -> None:
+    print("\n=== 4) Annual refresh check ===")
 
     source_csv = Path("data/raw/foi/annex_a.csv")
     if not source_csv.exists():
@@ -343,7 +343,7 @@ def main() -> None:
                 server.kill()
 
         run_spatial_check(results)
-        run_prefect_check(results)
+        run_annual_refresh_check(results)
 
     except Exception as exc:
         add_result(results, "unexpected exception", False, str(exc))

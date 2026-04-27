@@ -1,53 +1,33 @@
-"""Full pipeline flow: ingest, join, and compute metrics."""
+"""Full pipeline: ingest all sources and compute derived metrics."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-# Resolve data root: locally backend/ sits under repo root (parents[3]),
-# in Docker backend/ contents are copied directly to /app (parents[2])
-_LOCAL_ROOT = Path(__file__).parents[3]
-_DOCKER_ROOT = Path(__file__).parents[2]
-_REPO_ROOT = _LOCAL_ROOT if (_LOCAL_ROOT / "data").exists() else _DOCKER_ROOT
-_DATA_RAW = _REPO_ROOT / "data" / "raw"
 from sqlalchemy import create_engine
 
-try:
-    # Local dev: repo root in PYTHONPATH, backend is a package
-    from backend.pipeline.ingest.farm_census import insert_farm_census
-    from backend.pipeline.ingest.foi import load_and_clean_foi
-    from backend.pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
-    from backend.pipeline.ingest.lakes import load_lakes
-    from backend.pipeline.ingest.wfd_sites import load_wfd_sites
-    from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
-    from backend.pipeline.process.join import enrich_stations
-    from backend.pipeline.process.metrics import (
-        compute_annual_means,
-        compute_rolling_means,
-        compute_trend_results,
-        insert_annual_metrics,
-        insert_trend_results,
-    )
-except ModuleNotFoundError:
-    # Docker: backend/ contents copied directly to /app, no backend package
-    from pipeline.ingest.farm_census import insert_farm_census
-    from pipeline.ingest.foi import load_and_clean_foi
-    from pipeline.ingest.insert import insert_readings, insert_stations, insert_waterbodies, insert_lakes
-    from pipeline.ingest.lakes import load_lakes
-    from pipeline.ingest.wfd_sites import load_wfd_sites
-    from pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
-    from pipeline.process.join import enrich_stations
-    from pipeline.process.metrics import (
-        compute_annual_means,
-        compute_rolling_means,
-        compute_trend_results,
-        insert_annual_metrics,
-        insert_trend_results,
-    )
+import geopandas as gpd
+import pandas as pd
+
+from backend.pipeline.ingest.farm_census import insert_farm_census
+from backend.pipeline.ingest.foi import load_and_clean_foi
+from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_stations, insert_waterbodies
+from backend.pipeline.ingest.lakes import load_lakes
+from backend.pipeline.ingest.wfd_sites import load_wfd_sites
+from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
+from backend.pipeline.process.join import enrich_stations
+from backend.pipeline.process.metrics import (
+    compute_annual_means,
+    compute_rolling_means,
+    compute_trend_results,
+    insert_annual_metrics,
+    insert_trend_results,
+)
+
+_DATA_RAW = Path(__file__).parents[3] / "data" / "raw"
 
 
-def load_sources() -> tuple:
+def load_sources() -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame, gpd.GeoDataFrame, pd.DataFrame]:
     foi_path = str(_DATA_RAW / "foi" / "annex_a.csv")
     wfd_sites_path = str(next((_DATA_RAW / "wfd_sites").glob("*.geojson")))
     waterbodies_path = str(_DATA_RAW / "wfd_waterbodies" / "WFD_River_Water_Bodies_2016.shp")
@@ -61,13 +41,22 @@ def load_sources() -> tuple:
     return waterbodies, lakes, enriched, readings_df
 
 
-def persist_data(waterbodies, lakes, enriched, readings_df) -> dict[str, int]:
-    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+def persist_data(
+    waterbodies: gpd.GeoDataFrame,
+    lakes: gpd.GeoDataFrame,
+    enriched: gpd.GeoDataFrame,
+    readings_df: pd.DataFrame,
+    database_url: str,
+) -> dict[str, int]:
     engine = create_engine(database_url)
 
+    print("    inserting waterbodies...", flush=True)
     insert_waterbodies(waterbodies, engine)
+    print("    inserting lakes...", flush=True)
     insert_lakes(lakes, engine)
+    print("    inserting stations...", flush=True)
     insert_stations(enriched, engine)
+    print("    inserting readings...", flush=True)
     insert_readings(readings_df, engine)
 
     return {
@@ -78,14 +67,8 @@ def persist_data(waterbodies, lakes, enriched, readings_df) -> dict[str, int]:
     }
 
 
-def ingest_farms(engine_url: str) -> dict[str, int]:
-    engine = create_engine(engine_url)
-    n = insert_farm_census(engine)
-    return {"farm_ward_years": n}
-
-
-def compute_metrics(engine_url: str) -> dict[str, int]:
-    engine = create_engine(engine_url)
+def compute_metrics(database_url: str) -> dict[str, int]:
+    engine = create_engine(database_url)
 
     annual_df = compute_annual_means(engine)
     annual_df = compute_rolling_means(annual_df)
@@ -100,21 +83,44 @@ def compute_metrics(engine_url: str) -> dict[str, int]:
     }
 
 
-def run_full_pipeline() -> dict[str, int]:
+def ingest_farms(database_url: str) -> dict[str, int]:
+    engine = create_engine(database_url)
+    n = insert_farm_census(engine)
+    return {"farm_ward_years": n}
+
+
+def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
     """Ingest all sources and compute derived metrics."""
+    if database_url is None:
+        import os
+        database_url = (
+            os.environ.get("DATABASE_PUBLIC_URL")
+            or os.environ.get("DATABASE_URL")
+            or "postgresql://user:password@localhost:5433/phosphorus_db"
+        )
+
+    print("  Loading sources...", flush=True)
     waterbodies, lakes, enriched, readings_df = load_sources()
-    persist_summary = persist_data(waterbodies, lakes, enriched, readings_df)
+    print(
+        f"  Sources loaded: {len(waterbodies)} waterbodies, "
+        f"{len(enriched)} stations, {len(readings_df)} readings",
+        flush=True,
+    )
 
-    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    print("  Persisting data...", flush=True)
+    persist_summary = persist_data(waterbodies, lakes, enriched, readings_df, database_url)
+    print("  Data persisted", flush=True)
+
+    print("  Computing metrics...", flush=True)
     metrics_summary = compute_metrics(database_url)
-    farm_summary = ingest_farms(database_url)
+    print("  Metrics computed", flush=True)
 
-    return {
-        **persist_summary,
-        **metrics_summary,
-        **farm_summary,
-    }
+    print("  Ingesting farm census...", flush=True)
+    farm_summary = ingest_farms(database_url)
+    print("  Farm census ingested", flush=True)
+
+    return {**persist_summary, **metrics_summary, **farm_summary}
 
 
 if __name__ == "__main__":
-	print(run_full_pipeline())
+    print(run_full_pipeline())

@@ -1,19 +1,17 @@
-"""Database helpers for the API."""
+"""Database connection pool for the API."""
 
 from __future__ import annotations
 
 import contextlib
 import os
+import threading
 from typing import Generator
 
-import threading
-
 import psycopg2
-import psycopg2.extras
 import psycopg2.pool
 
 
-def get_database_url() -> str:
+def _database_url() -> str:
     return os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
 
 
@@ -29,7 +27,7 @@ def _get_pool() -> psycopg2.pool.ThreadedConnectionPool:
                 _pool = psycopg2.pool.ThreadedConnectionPool(
                     minconn=2,
                     maxconn=10,
-                    dsn=get_database_url(),
+                    dsn=_database_url(),
                 )
     return _pool
 

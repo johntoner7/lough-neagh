@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -12,14 +11,11 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import shape
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
-_LOCAL_ROOT = Path(__file__).parents[3]
-_DOCKER_ROOT = Path(__file__).parents[2]
-_DATA_ROOT = (_LOCAL_ROOT if (_LOCAL_ROOT / "data").exists() else _DOCKER_ROOT) / "data" / "raw" / "farms"
+_DATA_ROOT = Path(__file__).parents[3] / "data" / "raw" / "farms"
 
 WARDS_GEOJSON = _DATA_ROOT / "osni_open_data_largescale_boundaries_wards_2012.geojson"
-CENSUS_CSV = _DATA_ROOT / "FCWARD.20260420T210410.csv"
 
 CENSUS_YEARS = list(range(2015, 2025))
 
@@ -30,6 +26,13 @@ METRICS = {
     "Number of Farms": "num_farms",
     "Area farmed in hectares": "area_ha",
 }
+
+
+def _find_census_csv() -> Path:
+    candidates = sorted(_DATA_ROOT.glob("FCWARD.*.csv"))
+    if not candidates:
+        raise FileNotFoundError(f"No FCWARD.*.csv found in {_DATA_ROOT}")
+    return candidates[-1]
 
 
 def _strip_suffix(name: str) -> str:
@@ -44,11 +47,11 @@ def load_farm_census() -> gpd.GeoDataFrame:
     Returns a GeoDataFrame with one row per (ward, year) containing
     cattle headcounts, area, and derived density metrics.
     """
+    census_csv = _find_census_csv()
+
     with open(WARDS_GEOJSON) as f:
         geo = json.load(f)
 
-    # Build lookup: stripped name → list of (ward_code, geometry)
-    # Multiple polygons may share a stripped name (different council areas)
     geo_lookup: dict[str, list[dict]] = defaultdict(list)
     for feat in geo["features"]:
         props = feat["properties"]
@@ -59,9 +62,8 @@ def load_farm_census() -> gpd.GeoDataFrame:
             "geometry": shape(feat["geometry"]),
         })
 
-    # Parse CSV into nested dict: stripped_name → year → metric → value
     census: dict[str, dict[int, dict[str, float]]] = defaultdict(lambda: defaultdict(dict))
-    with open(CENSUS_CSV, encoding="utf-8-sig") as f:
+    with open(census_csv, encoding="utf-8-sig") as f:
         for row in csv.DictReader(f):
             label = row["Statistic Label"]
             if label not in METRICS or row["Ward"] == "Northern Ireland" or not row["VALUE"]:
@@ -76,10 +78,8 @@ def load_farm_census() -> gpd.GeoDataFrame:
             key = _strip_suffix(row["Ward"])
             census[key][year][METRICS[label]] = value
 
-    # Join: for each geo ward, sum census values from all CSV rows that match
     records = []
     for geo_key, geo_entries in geo_lookup.items():
-        # Aggregate any CSV rows that strip to the same name (same-named wards)
         ward_data = census.get(geo_key, {})
 
         for year in CENSUS_YEARS:
@@ -94,7 +94,6 @@ def load_farm_census() -> gpd.GeoDataFrame:
             lu = ((cattle or 0) + (sheep or 0) * 0.15 + (pigs or 0) * 0.25)
             lu_per_ha = round(lu / area_ha, 3) if lu and area_ha else None
 
-            # One DB row per geo polygon (ward_code is unique per polygon)
             for entry in geo_entries:
                 records.append({
                     "ward_name": entry["ward_name"],
@@ -120,27 +119,8 @@ def insert_farm_census(engine) -> int:
     """Truncate and reload farm_census_wards table. Returns row count inserted."""
     gdf = load_farm_census()
 
-    with engine.connect() as conn:
-        table_exists = conn.execute(text(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'farm_census_wards')"
-        )).scalar()
-
-    if table_exists:
-        with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY"))
-        gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False)
-    else:
-        gdf.to_postgis("farm_census_wards", engine, if_exists="replace", index=False)
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY;"))
+    gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False)
 
     return len(gdf)
-
-
-def main() -> None:
-    url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-    engine = create_engine(url)
-    n = insert_farm_census(engine)
-    print(f"Inserted {n} rows into farm_census_wards")
-
-
-if __name__ == "__main__":
-    main()

@@ -10,7 +10,6 @@ dependencies = [
     "psycopg2-binary>=2.9.9",
     "sqlalchemy>=2.0.0",
     "geoalchemy2>=0.17.0",
-    "prefect>=3.0.0",
     "pandas>=3.0.2",
     "shapely>=2.0.0",
     "pyproj>=3.7.0",

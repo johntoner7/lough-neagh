@@ -8,7 +8,8 @@ FastAPI application serving 35 years of DAERA river phosphorus monitoring data f
 
 | Setting | Value |
 |---|---|
-| Framework | FastAPI 1.0.0 |
+| Framework | FastAPI |
+| API version | 1.0.0 |
 | CORS | `*` (all origins), GET only |
 | Database | PostgreSQL + PostGIS via psycopg2 |
 | DB connection | `DATABASE_URL` env var or `postgresql://user:password@localhost:5433/phosphorus_db` |
@@ -60,6 +61,7 @@ All stations as GeoJSON FeatureCollection with annual phosphorus metrics.
 | `wfd_matched_only` | bool | ✗ | false | Only WFD-matched stations |
 | `with_data_only` | bool | ✗ | false | Only stations with data for that year |
 | `metric` | `"annual"` \| `"rolling"` | ✗ | `"annual"` | Metric to use for map values |
+| `bbox` | str | ✗ | null | Bounding box filter: `minLon,minLat,maxLon,maxLat` (WGS84) |
 
 **Response:** GeoJSON FeatureCollection
 ```json
@@ -176,7 +178,7 @@ All lake polygons with WFD ecological status classifications.
         "lake_name": "Lough Neagh",
         "ecological_status": "Poor",
         "total_phosphorus": "Bad",
-        "label_text": "Lough Neagh — Phosphorus: Bad"
+        "label_text": ""
       }
     }
   ]
@@ -232,9 +234,11 @@ OSNI ward boundaries joined with NISRA livestock census data.
 | Table | Key Columns | Purpose |
 |---|---|---|
 | `stations` | `station_code` PK, `location_name`, `catchment_name`, `river_waterbody_id`, `wfd_matched`, `geom` | Station metadata + PostGIS geometry |
+| `readings` | `station_code`, `reading_date`, `p_sol_mg_l`, `p_tot_mg_l`, `no3_n_mg_l`, `no2_n_mg_l`, `below_detection`, `sparse_year` | Raw individual phosphorus readings |
 | `annual_metrics` | `station_code`, `year`, `annual_mean_p_sol`, `rolling_mean_5yr`, `wfd_compliant`, `sparse_year`, `reading_count` | Per-year phosphorus measurements |
 | `trend_results` | `station_code`, `trend_direction`, `significant`, `sens_slope` | Mann-Kendall trend analysis |
-| `lakes` | `lake_id`, `lake_name`, `ecological_status`, `total_phosphorus`, `label_text`, `geometry` | Lake polygons + WFD status |
+| `waterbodies` | `river_waterbody_id` PK, `catchment_name`, `geom` | WFD river water body polygons |
+| `lakes` | `lake_id` PK, `lake_name`, `ecological_status`, `total_phosphorus`, `label_text`, `geometry` | Lake polygons + WFD status |
 | `farm_census_wards` | `year`, `ward_name`, `ward_code`, `num_farms`, `area_ha`, `cattle`, `sheep`, `pigs`, `cattle_per_ha`, `lu_per_ha`, `geometry` | NISRA farm census by ward |
 
 **WFD compliance threshold:** `0.035 mg/l P(SOL)` — stations above this are non-compliant.

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-import threading
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -16,57 +15,27 @@ load_dotenv()
 
 from api.db import close_pool, get_conn
 from api.logging_config import configure_logging
+from api.routes import catchments, farms, lakes, stations
+from scripts.create_tables import main as create_tables
+from scripts.init_db import main as init_db
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
-from api.routes import catchments, farms, lakes, stations
-
 
 def _init_db() -> None:
-    """Ensure PostGIS extension and schema tables exist."""
-    from sqlalchemy import create_engine, text
+    """Ensure PostGIS extensions and schema tables exist on startup."""
     database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-    engine = create_engine(database_url)
-    with engine.begin() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis_topology;"))
-    logger.info("PostGIS extensions ensured")
 
-    try:
-        from scripts.create_tables import main as create_tables
-    except ModuleNotFoundError:
-        from backend.scripts.create_tables import main as create_tables
-    create_tables()
-    logger.info("Schema tables ensured")
-
-
-def _db_is_empty() -> bool:
-    try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM annual_metrics")
-                return cur.fetchone()[0] == 0
-    except Exception:
-        return True  # table doesn't exist yet
-
-
-def _seed_in_background() -> None:
-    logger.info("Database empty — running pipeline to seed data")
-    try:
-        from pipeline.flows.full_pipeline import run_full_pipeline
-        summary = run_full_pipeline()
-        logger.info("Seed complete: %s", summary)
-    except Exception:
-        logger.exception("Seed pipeline failed")
+    init_db(database_url)
+    create_tables(database_url)
+    logger.info("Database schema ensured")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("API starting up")
     _init_db()
-    if _db_is_empty():
-        threading.Thread(target=_seed_in_background, daemon=True).start()
     yield
     close_pool()
     logger.info("Connection pool closed")
@@ -86,11 +55,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET"],
     allow_headers=["*"],
 )
-
-
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -116,34 +83,6 @@ app.include_router(stations.router)
 app.include_router(catchments.router)
 app.include_router(lakes.router)
 app.include_router(farms.router)
-
-
-
-
-
-_seed_lock = threading.Lock()
-_seeding = False
-
-
-@app.post("/seed")
-def trigger_seed() -> dict:
-    """Manually trigger the seed pipeline in the background."""
-    global _seeding
-    with _seed_lock:
-        if _seeding:
-            return {"status": "already_running"}
-        _seeding = True
-
-    def _run():
-        global _seeding
-        try:
-            _seed_in_background()
-        finally:
-            with _seed_lock:
-                _seeding = False
-
-    threading.Thread(target=_run, daemon=True).start()
-    return {"status": "started"}
 
 
 @app.get("/config")

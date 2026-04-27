@@ -1,8 +1,6 @@
-"""Pydantic schemas for the API."""
+"""Pydantic response schemas for the API."""
 
 from __future__ import annotations
-
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -12,22 +10,22 @@ from api.constants import WFD_THRESHOLD_MG_L
 class StationProperties(BaseModel):
     station_code: int
     location_name: str
-    catchment_name: Optional[str]
-    river_waterbody_id: Optional[str]
+    catchment_name: str | None
+    river_waterbody_id: str | None
     wfd_matched: bool
-    annual_mean_p_sol: Optional[float]
-    rolling_mean_5yr: Optional[float]
-    metric_p_sol: Optional[float] = None
-    wfd_compliant: Optional[bool]
-    sparse_year: Optional[bool]
-    trend_direction: Optional[str]
-    trend_significant: Optional[bool]
-    sens_slope: Optional[float]
+    annual_mean_p_sol: float | None
+    rolling_mean_5yr: float | None
+    metric_p_sol: float | None = None
+    wfd_compliant: bool | None
+    sparse_year: bool | None
+    trend_direction: str | None
+    trend_significant: bool | None
+    sens_slope: float | None
 
 
 class StationFeature(BaseModel):
     type: str = "Feature"
-    geometry: Optional[dict]
+    geometry: dict | None
     properties: StationProperties
 
 
@@ -37,7 +35,7 @@ class CollectionMetadata(BaseModel):
     stations_with_data: int
     stations_above_threshold: int
     wfd_threshold_mg_l: float = WFD_THRESHOLD_MG_L
-    data_note: Optional[str] = None
+    data_note: str | None = None
 
 
 class StationCollection(BaseModel):
@@ -48,20 +46,20 @@ class StationCollection(BaseModel):
 
 class TimeSeriesPoint(BaseModel):
     year: int
-    annual_mean_p_sol: Optional[float]
-    rolling_mean_5yr: Optional[float]
+    annual_mean_p_sol: float | None
+    rolling_mean_5yr: float | None
     reading_count: int
     sparse_year: bool
-    wfd_compliant: Optional[bool]
+    wfd_compliant: bool | None
 
 
 class StationTimeSeries(BaseModel):
     station_code: int
     location_name: str
-    catchment_name: Optional[str]
-    trend_direction: Optional[str]
-    trend_significant: Optional[bool]
-    sens_slope: Optional[float]
+    catchment_name: str | None
+    trend_direction: str | None
+    trend_significant: bool | None
+    sens_slope: float | None
     series: list[TimeSeriesPoint]
 
 
@@ -69,22 +67,22 @@ class CatchmentSummary(BaseModel):
     catchment_name: str
     year: int
     station_count: int
-    mean_p_sol: Optional[float]
-    pct_above_threshold: Optional[float]
+    mean_p_sol: float | None
+    pct_above_threshold: float | None
     stations: list[StationProperties]
 
 
 class LakeProperties(BaseModel):
     lake_id: str
     lake_name: str
-    ecological_status: Optional[str]
-    total_phosphorus: Optional[str]
-    label_text: Optional[str]
+    ecological_status: str | None
+    total_phosphorus: str | None
+    label_text: str | None
 
 
 class LakeFeature(BaseModel):
     type: str = "Feature"
-    geometry: Optional[dict]
+    geometry: dict | None
     properties: LakeProperties
 
 
@@ -96,18 +94,18 @@ class LakeCollection(BaseModel):
 class FarmProperties(BaseModel):
     ward_name: str
     ward_code: str
-    num_farms: Optional[int]
-    area_ha: Optional[float]
-    cattle: Optional[int]
-    sheep: Optional[int]
-    pigs: Optional[int]
-    cattle_per_ha: Optional[float]
-    lu_per_ha: Optional[float]
+    num_farms: int | None
+    area_ha: float | None
+    cattle: int | None
+    sheep: int | None
+    pigs: int | None
+    cattle_per_ha: float | None
+    lu_per_ha: float | None
 
 
 class FarmFeature(BaseModel):
     type: str = "Feature"
-    geometry: Optional[dict]
+    geometry: dict | None
     properties: FarmProperties
 
 

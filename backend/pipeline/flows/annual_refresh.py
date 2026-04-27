@@ -4,44 +4,37 @@ Re-ingests updated DAERA FOI data and recomputes metrics only for stations
 that received new readings. Safe to run multiple times on the same file —
 new readings are identified by (station_code, reading_date) and inserted once.
 
-Typical use:
-    python -m backend.pipeline.flows.annual_refresh --csv-path data/raw/foi/annex_a.csv
+Usage:
+    uv run python -m backend.pipeline.flows.annual_refresh
+    uv run python -m backend.pipeline.flows.annual_refresh --csv-path data/raw/foi/annex_a.csv
 
 Schedule: run each February after DAERA publishes the annual data update.
 """
 
 from __future__ import annotations
 
+import argparse
+import logging
 import os
 import sys
 from typing import Any
 
 import pandas as pd
 import pymannkendall as mk
-from prefect import flow, get_run_logger, task
 from sqlalchemy import create_engine, text
 
 from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.process.metrics import compute_rolling_means
+
+logger = logging.getLogger(__name__)
 
 
 def _engine(database_url: str):
     return create_engine(database_url)
 
 
-def _database_url() -> str:
-    return os.environ.get(
-        "DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db"
-    )
-
-
-# ─── Tasks ────────────────────────────────────────────────────────────────────
-
-@task(name="identify-new-readings")
 def identify_new_readings(csv_path: str, engine) -> pd.DataFrame:
     """Load and clean the updated FOI CSV; return only readings not yet in the DB."""
-    log = get_run_logger()
-
     _, readings_df = load_and_clean_foi(csv_path)
     readings_df["reading_date"] = pd.to_datetime(readings_df["reading_date"])
 
@@ -59,20 +52,18 @@ def identify_new_readings(csv_path: str, engine) -> pd.DataFrame:
     )
     new_readings = merged[merged["_merge"] == "left_only"].drop(columns=["_merge"])
 
-    log.info(
-        f"CSV contains {len(readings_df):,} readings. "
-        f"{len(new_readings):,} are new (not yet in database)."
+    logger.info(
+        "CSV contains %d readings. %d are new (not yet in database).",
+        len(readings_df),
+        len(new_readings),
     )
     return new_readings
 
 
-@task(name="insert-new-readings")
 def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]:
     """Append new readings to the readings table. Returns affected stations and years."""
-    log = get_run_logger()
-
     if new_readings_df.empty:
-        log.info("No new readings to insert — database is already up to date.")
+        logger.info("No new readings to insert — database is already up to date.")
         return {"new_readings": 0, "affected_stations": [], "affected_years": []}
 
     columns = [
@@ -100,9 +91,11 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
         int(y) for y in pd.to_datetime(new_readings_df["reading_date"]).dt.year.unique()
     )
 
-    log.info(
-        f"Inserted {len(insert_df):,} new readings across "
-        f"{len(affected_stations)} stations, years {affected_years}."
+    logger.info(
+        "Inserted %d new readings across %d stations, years %s.",
+        len(insert_df),
+        len(affected_stations),
+        affected_years,
     )
     return {
         "new_readings": len(insert_df),
@@ -111,12 +104,8 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
     }
 
 
-@task(name="recompute-annual-metrics")
 def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
     """Delete and recompute annual_metrics + rolling means for affected stations."""
-    log = get_run_logger()
-
-    # Build a safe IN-list from validated integers
     station_list = ", ".join(str(int(s)) for s in affected_stations)
 
     annual_df = pd.read_sql_query(
@@ -138,7 +127,6 @@ def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
         engine,
     )
 
-    # Recompute 5-year rolling means (requires full station history, which we have)
     annual_df = compute_rolling_means(annual_df)
 
     insert_df = annual_df[[
@@ -156,9 +144,7 @@ def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
     )
 
     with engine.begin() as conn:
-        conn.execute(
-            text(f"DELETE FROM annual_metrics WHERE station_code IN ({station_list})")
-        )
+        conn.execute(text(f"DELETE FROM annual_metrics WHERE station_code IN ({station_list})"))
 
     insert_df.to_sql(
         "annual_metrics", engine,
@@ -166,18 +152,16 @@ def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
         chunksize=1000, method="multi",
     )
 
-    log.info(
-        f"Recomputed {len(insert_df):,} station-year metric rows "
-        f"for {len(affected_stations)} stations."
+    logger.info(
+        "Recomputed %d station-year metric rows for %d stations.",
+        len(insert_df),
+        len(affected_stations),
     )
     return len(insert_df)
 
 
-@task(name="recompute-trend-results")
 def recompute_trend_results(affected_stations: list[int], engine) -> int:
     """Recompute Mann-Kendall trend results for affected stations."""
-    log = get_run_logger()
-
     station_list = ", ".join(str(int(s)) for s in affected_stations)
 
     annual_data = pd.read_sql_query(
@@ -193,17 +177,12 @@ def recompute_trend_results(affected_stations: list[int], engine) -> int:
 
     results = []
     for station in annual_data["station_code"].unique():
-        series = (
-            annual_data[annual_data["station_code"] == station]
-            .sort_values("year")
-        )
+        series = annual_data[annual_data["station_code"] == station].sort_values("year")
         valid = series[~series["sparse_year"]]
 
         if len(valid) >= 8:
             r = mk.original_test(valid["annual_mean_p_sol"].values)
-            direction = (
-                r.trend if r.trend in ("increasing", "decreasing") else "no trend"
-            )
+            direction = r.trend if r.trend in ("increasing", "decreasing") else "no trend"
             results.append({
                 "station_code": int(station),
                 "trend_direction": direction,
@@ -223,48 +202,37 @@ def recompute_trend_results(affected_stations: list[int], engine) -> int:
             })
 
     if not results:
-        log.info("No trend results to update.")
+        logger.info("No trend results to update.")
         return 0
 
     trend_df = pd.DataFrame(results)
 
     with engine.begin() as conn:
-        conn.execute(
-            text(f"DELETE FROM trend_results WHERE station_code IN ({station_list})")
-        )
+        conn.execute(text(f"DELETE FROM trend_results WHERE station_code IN ({station_list})"))
 
     trend_df.to_sql(
         "trend_results", engine,
         if_exists="append", index=False, method="multi",
     )
 
-    log.info(f"Updated trend results for {len(results)} stations.")
+    logger.info("Updated trend results for %d stations.", len(results))
     return len(results)
 
 
-# ─── Flow ─────────────────────────────────────────────────────────────────────
-
-@flow(
-    name="phosphorus-annual-refresh",
-    description=(
-        "Re-ingests updated DAERA FOI data and recomputes metrics for affected stations. "
-        "Idempotent: new readings are identified by (station_code, reading_date) and "
-        "inserted only once. Run after DAERA publishes annual data (typically February)."
-    ),
-)
 def annual_refresh(
     csv_path: str = "data/raw/foi/annex_a.csv",
     database_url: str | None = None,
 ) -> dict[str, Any]:
     """
-    1. Load and clean updated FOI CSV.
+    Incrementally update the database with new FOI readings.
+
+    1. Load and clean the updated FOI CSV.
     2. Identify readings not already in the database (by station_code + reading_date).
     3. Insert only new readings — safe to re-run on the same file.
     4. Recompute annual_metrics and 5-year rolling means for affected stations only.
     5. Recompute Mann-Kendall trend results for affected stations only.
-    6. Return a summary dict.
     """
-    url = database_url or _database_url()
+    url = database_url or os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
     engine = _engine(url)
 
     new_readings = identify_new_readings(csv_path, engine)
@@ -283,10 +251,8 @@ def annual_refresh(
     }
 
 
-# ─── CLI entry point ──────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
-    import argparse
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
     parser = argparse.ArgumentParser(description="Run the annual phosphorus data refresh.")
     parser.add_argument(

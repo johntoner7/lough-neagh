@@ -101,9 +101,9 @@ CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(sta
 """
 
 
-def main() -> None:
-    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-    engine = create_engine(database_url)
+def main(database_url: str | None = None) -> None:
+    url = database_url or os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    engine = create_engine(url)
 
     with engine.begin() as connection:
         for statement in TABLES_SQL.split(";"):

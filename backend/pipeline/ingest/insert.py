@@ -2,32 +2,18 @@
 
 from __future__ import annotations
 
-import os
-
 import geopandas as gpd
 import pandas as pd
-from sqlalchemy import text
 from shapely.geometry import Point
-
-
-def _database_url() -> str:
-    return os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+from sqlalchemy import text
 
 
 def insert_stations(enriched_stations_gdf: gpd.GeoDataFrame, engine) -> None:
-    """Insert all stations into the `stations` table."""
+    """Truncate and reload the stations table (also truncates dependent readings)."""
     required_columns = [
-        "station_code",
-        "location_name",
-        "wfd_site_id",
-        "river_waterbody_id",
-        "catchment_name",
-        "easting",
-        "northing",
-        "wfd_matched",
-        "first_reading",
-        "last_reading",
-        "total_readings",
+        "station_code", "location_name", "wfd_site_id", "river_waterbody_id",
+        "catchment_name", "easting", "northing", "wfd_matched",
+        "first_reading", "last_reading", "total_readings",
     ]
 
     stations = enriched_stations_gdf.copy()
@@ -49,85 +35,54 @@ def insert_stations(enriched_stations_gdf: gpd.GeoDataFrame, engine) -> None:
     stations["easting"] = stations["easting"].fillna(geom_x)
     stations["northing"] = stations["northing"].fillna(geom_y)
 
-    # Validate Irish Grid coordinate ranges: easting 0-400k, northing 0-470k
-    valid_easting = (stations["easting"] >= 0) & (stations["easting"] <= 400000)
-    valid_northing = (stations["northing"] >= 0) & (stations["northing"] <= 470000)
-    valid_coords = valid_easting & valid_northing
+    # Validate Irish Grid coordinate ranges: easting 0–400k, northing 0–470k
+    valid = (
+        (stations["easting"] >= 0) & (stations["easting"] <= 400_000) &
+        (stations["northing"] >= 0) & (stations["northing"] <= 470_000)
+    )
+    stations.loc[~valid, ["easting", "northing", "geom"]] = None
 
-    # Set invalid coordinates and geometry to null
-    invalid_mask = ~valid_coords
-    if invalid_mask.any():
-        stations.loc[invalid_mask, "easting"] = None
-        stations.loc[invalid_mask, "northing"] = None
-        stations.loc[invalid_mask, "geom"] = None
-
-    missing_coords = stations["easting"].isna() | stations["northing"].isna()
-    if missing_coords.any():
-        stations.loc[missing_coords, "easting"] = 0
-        stations.loc[missing_coords, "northing"] = 0
-        stations.loc[missing_coords, "geom"] = [Point(0, 0)] * int(missing_coords.sum())
+    missing = stations["easting"].isna() | stations["northing"].isna()
+    if missing.any():
+        stations.loc[missing, "easting"] = 0
+        stations.loc[missing, "northing"] = 0
+        stations.loc[missing, "geom"] = [Point(0, 0)] * int(missing.sum())
 
     stations["easting"] = stations["easting"].astype("Int64")
     stations["northing"] = stations["northing"].astype("Int64")
 
-    if _table_exists(engine, "stations"):
-        with engine.begin() as connection:
-            connection.execute(text("TRUNCATE TABLE readings RESTART IDENTITY;"))
-            connection.execute(text("TRUNCATE TABLE stations RESTART IDENTITY CASCADE;"))
-        stations.to_postgis("stations", engine, if_exists="append", index=False)
-    else:
-        stations.to_postgis("stations", engine, if_exists="replace", index=False)
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE readings RESTART IDENTITY;"))
+        conn.execute(text("TRUNCATE TABLE stations RESTART IDENTITY CASCADE;"))
+    stations.to_postgis("stations", engine, if_exists="append", index=False, chunksize=100)
 
 
 def insert_readings(readings_df: pd.DataFrame, engine) -> None:
-    """Insert cleaned readings into the `readings` table in chunks."""
+    """Append cleaned readings (stations table was already truncated by insert_stations)."""
     columns = [
-        "station_code",
-        "reading_date",
-        "p_sol_mg_l",
-        "p_tot_mg_l",
-        "no3_n_mg_l",
-        "no2_n_mg_l",
-        "below_detection",
-        "sparse_year",
+        "station_code", "reading_date", "p_sol_mg_l", "p_tot_mg_l",
+        "no3_n_mg_l", "no2_n_mg_l", "below_detection", "sparse_year",
     ]
-    readings = readings_df.copy()
-    readings = readings[columns]
+    readings = readings_df[columns].copy()
     readings["station_code"] = pd.to_numeric(readings["station_code"], errors="coerce").astype("Int64")
     readings["reading_date"] = pd.to_datetime(readings["reading_date"], errors="coerce").dt.date
 
     readings.to_sql(
-        "readings",
-        engine,
-        if_exists="append" if _table_exists(engine, "readings") else "replace",
-        index=False,
-        chunksize=10_000,
-        method="multi",
+        "readings", engine,
+        if_exists="append", index=False,
+        chunksize=10_000, method="multi",
     )
 
 
-def _table_exists(engine, table: str) -> bool:
-    with engine.connect() as conn:
-        return conn.execute(text(
-            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = :t)"
-        ), {"t": table}).scalar()
-
-
 def insert_waterbodies(waterbodies_gdf: gpd.GeoDataFrame, engine) -> None:
-    """Insert WFD waterbody polygons into the `waterbodies` table."""
-    if _table_exists(engine, "waterbodies"):
-        with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY"))
-        waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False)
-    else:
-        waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="replace", index=False)
+    """Truncate and reload the waterbodies table."""
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY;"))
+    waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False, chunksize=50)
 
 
 def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
-    """Insert lake polygons into the `lakes` table."""
-    if _table_exists(engine, "lakes"):
-        with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY"))
-        lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False)
-    else:
-        lakes_gdf.to_postgis("lakes", engine, if_exists="replace", index=False)
+    """Truncate and reload the lakes table."""
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY;"))
+    lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False, chunksize=50)
