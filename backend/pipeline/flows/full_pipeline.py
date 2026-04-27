@@ -5,8 +5,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# Repo root: works regardless of cwd (local dev or Docker /app)
-_REPO_ROOT = Path(__file__).parents[3]
+# Resolve data root: locally backend/ sits under repo root (parents[3]),
+# in Docker backend/ contents are copied directly to /app (parents[2])
+_LOCAL_ROOT = Path(__file__).parents[3]
+_DOCKER_ROOT = Path(__file__).parents[2]
+_REPO_ROOT = _LOCAL_ROOT if (_LOCAL_ROOT / "data").exists() else _DOCKER_ROOT
 _DATA_RAW = _REPO_ROOT / "data" / "raw"
 from sqlalchemy import create_engine
 

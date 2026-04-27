@@ -9,7 +9,7 @@ import threading
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
@@ -23,9 +23,31 @@ logger = logging.getLogger(__name__)
 from api.routes import catchments, farms, lakes, stations
 
 
+def _db_is_empty() -> bool:
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM stations")
+                return cur.fetchone()[0] == 0
+    except Exception:
+        return True  # table doesn't exist yet
+
+
+def _seed_in_background() -> None:
+    logger.info("Database empty — running pipeline to seed data")
+    try:
+        from pipeline.flows.full_pipeline import run_full_pipeline
+        summary = run_full_pipeline()
+        logger.info("Seed complete: %s", summary)
+    except Exception:
+        logger.exception("Seed pipeline failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("API starting up")
+    if _db_is_empty():
+        threading.Thread(target=_seed_in_background, daemon=True).start()
     yield
     close_pool()
     logger.info("Connection pool closed")
@@ -49,8 +71,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─── Pipeline run state ───────────────────────────────────────────────────────
-_pipeline_state: dict = {"status": "idle", "last_run": None, "summary": None, "error": None}
 
 
 @app.middleware("http")
@@ -79,43 +99,7 @@ app.include_router(lakes.router)
 app.include_router(farms.router)
 
 
-def _run_pipeline_background() -> None:
-    import datetime
-    from pipeline.flows.full_pipeline import run_full_pipeline
-    _pipeline_state["status"] = "running"
-    _pipeline_state["error"] = None
-    try:
-        summary = run_full_pipeline()
-        _pipeline_state["status"] = "done"
-        _pipeline_state["summary"] = summary
-    except Exception as exc:
-        logger.exception("Pipeline run failed")
-        _pipeline_state["status"] = "error"
-        # Truncate to first line — full exc includes entire SQL batch + parameters
-        _pipeline_state["error"] = str(exc).splitlines()[0][:300]
-    finally:
-        _pipeline_state["last_run"] = datetime.datetime.utcnow().isoformat()
 
-
-@app.post("/admin/pipeline")
-def trigger_pipeline(x_pipeline_secret: str | None = Header(default=None)) -> dict:
-    """Trigger a full pipeline reload. Protected by X-Pipeline-Secret header."""
-    secret = os.environ.get("PIPELINE_SECRET")
-    if not secret or x_pipeline_secret != secret:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Secret header")
-    if _pipeline_state["status"] == "running":
-        return {"accepted": False, "reason": "Pipeline already running"}
-    threading.Thread(target=_run_pipeline_background, daemon=True).start()
-    return {"accepted": True, "message": "Pipeline started — poll /admin/pipeline/status to track progress"}
-
-
-@app.get("/admin/pipeline/status")
-def pipeline_status(x_pipeline_secret: str | None = Header(default=None)) -> dict:
-    """Check the status of the last pipeline run."""
-    secret = os.environ.get("PIPELINE_SECRET")
-    if not secret or x_pipeline_secret != secret:
-        raise HTTPException(status_code=401, detail="Invalid or missing X-Pipeline-Secret header")
-    return _pipeline_state
 
 
 @app.get("/config")
