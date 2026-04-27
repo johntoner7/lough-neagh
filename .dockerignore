@@ -9,6 +9,8 @@ frontend/
 # data/
 *.lpkx
 *.zip
+data/raw/critical_risk/
+data/extracted/
 
 # Python artefacts
 **/__pycache__
