@@ -13,6 +13,7 @@ import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from '../constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
 import type { ExpressionSpecification } from 'mapbox-gl'
+import { UI_TEXT } from '../uiText'
 
 interface FarmHover {
   dea_name: string
