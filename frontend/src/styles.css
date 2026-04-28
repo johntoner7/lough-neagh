@@ -243,6 +243,7 @@ html, body, #root {
   background: linear-gradient(180deg, #fcfbf9 0%, #f7f5ef 100%);
   border-left: 1px solid var(--border);
   overflow-y: auto;
+  transition: width 0.22s ease, padding 0.22s ease, opacity 0.18s ease, border-color 0.18s ease;
 }
 
 @media (max-width: 760px) {
@@ -451,6 +452,8 @@ html, body, #root {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid var(--border);
+  max-height: 600px;
+  transition: opacity 0.2s ease, max-height 0.25s ease;
 }
 
 .sparkline-cell {
@@ -497,6 +500,8 @@ html, body, #root {
   font-size: 10px;
   color: var(--text-dim);
   line-height: 1.5;
+  max-height: 200px;
+  transition: opacity 0.2s ease, max-height 0.25s ease;
 }
 
 .sparkline-methodology p + p {
@@ -806,6 +811,8 @@ html, body, #root {
   padding: 10px 24px 14px;
   background: var(--surface);
   border-top: 1px solid var(--border);
+  max-height: 300px;
+  transition: opacity 0.2s ease, max-height 0.25s ease;
 }
 
 /* year label only shown in mobile vertical layout */
@@ -1011,8 +1018,8 @@ input[type="range"]::-moz-range-thumb {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  padding: 9px 13px;
-  font-size: 13px;
+  padding: 11px 17px;
+  font-size: 16px;
   line-height: 1;
   transition: color 0.15s, background 0.15s;
   display: flex;
@@ -1031,8 +1038,8 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .player-play {
-  font-size: 12px;
-  padding: 9px 12px;
+  font-size: 14px;
+  padding: 11px 15px;
 }
 
 .player-play.active {
@@ -1040,11 +1047,11 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .player-year {
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-muted);
   letter-spacing: 0.03em;
-  min-width: 38px;
+  min-width: 46px;
   text-align: center;
   user-select: none;
   padding: 0 2px;
@@ -1052,7 +1059,7 @@ input[type="range"]::-moz-range-thumb {
 
 .player-divider {
   width: 1px;
-  height: 16px;
+  height: 20px;
   background: var(--border);
   flex-shrink: 0;
 }
@@ -1374,12 +1381,110 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .player-btn {
-    padding: 8px 11px;
-    font-size: 12px;
+    padding: 10px 14px;
+    font-size: 15px;
   }
 
   .player-year {
-    font-size: 11px;
+    font-size: 15px;
+    min-width: 44px;
+  }
+}
+
+/* ─── Cinematic play mode ────────────────────────────────────────────────── */
+
+@keyframes captionFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cinematic-caption {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  pointer-events: none;
+  animation: captionFadeIn 0.25s ease;
+}
+
+.cinematic-caption span {
+  display: block;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 7px 16px;
+  border-radius: 6px;
+  max-width: min(90vw, 460px);
+  text-align: center;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: captionFadeIn 0.4s ease;
+}
+
+/* Controls panel: slide out to the right */
+.app-layout--playing .controls-panel {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  opacity: 0;
+  overflow: hidden;
+  border-left-color: transparent;
+}
+
+/* Timeline, sparkline panel, methodology footer: fade + collapse */
+.app-layout--playing .timeline-bar,
+.app-layout--playing .sparkline-panel,
+.app-layout--playing .sparkline-methodology {
+  opacity: 0;
+  max-height: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  /* Caption: larger text on small screens */
+  .cinematic-caption span {
+    font-size: 14px;
+    max-width: 92vw;
+    padding: 8px 14px;
+  }
+
+  /* Controls panel on mobile is stacked vertically — collapse by height not width */
+  .controls-panel {
+    max-height: 1000px;
+    transition: max-height 0.28s ease, padding 0.22s ease, opacity 0.2s ease;
+  }
+
+  .app-layout--playing .controls-panel {
+    width: 100%;
+    max-height: 0;
+    padding: 0;
+    opacity: 0;
+    overflow: hidden;
+    border-left-color: var(--border);
+  }
+
+  /* During play, lock hero section to full viewport and expand the map to fill it */
+  .app-layout--playing .hero-section {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app-layout--playing .map-and-controls {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app-layout--playing .map-column {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .app-layout--playing .map-container {
+    height: auto;
+    flex: 1;
   }
 }
 

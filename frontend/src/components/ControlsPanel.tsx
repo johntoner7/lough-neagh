@@ -1,4 +1,5 @@
 import { YEAR_MAX, YEAR_MIN } from '../constants'
+import { getEraCaption } from '../eraCaptions'
 import { UI_TEXT } from '../uiText'
 
 import type { SummaryStats } from '../types'
@@ -26,10 +27,7 @@ export default function ControlsPanel({
 }: Props) {
   const isBaselineYear = year === YEAR_MIN
 
-  const narration =
-    year >= YEAR_MIN && year <= 1998 ? UI_TEXT.sidebar.narrationSewage :
-    year >= 2005 && year <= YEAR_MAX ? UI_TEXT.sidebar.narrationStalled :
-    null
+  const narration = getEraCaption(year)
 
   return (
     <aside className="controls-panel">

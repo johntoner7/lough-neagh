@@ -64,7 +64,7 @@ interface Props {
   keyStationsData: GeoJSONCollection
   selectedFeature: StationFeature | null
   showFarmLayer: boolean
-  onStationClick: (feature: StationFeature, point: ScreenPoint) => void
+  onStationClick?: (feature: StationFeature, point: ScreenPoint) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -116,7 +116,18 @@ export default function MapContainer({
   onStationClick,
 }: Props) {
   const mapRef = useRef<MapRef>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const farmFetchIdRef = useRef(0)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new ResizeObserver(() => {
+      mapRef.current?.getMap().resize()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
   const [lakePolygons, setLakePolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
@@ -165,6 +176,7 @@ export default function MapContainer({
   }, [year, showFarmLayer])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
+    if (!onStationClick) return
     const feature = e.features?.[0]
     if (!feature) return
     // mapbox-gl coerces boolean/null properties when returning rendered features,
@@ -207,7 +219,7 @@ export default function MapContainer({
   }, [showFarmLayer])
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
     {showFarmLayer && farmLayerLoading && (
       <div style={{
         position: 'absolute',
@@ -370,7 +382,7 @@ export default function MapContainer({
       mapStyle="mapbox://styles/mapbox/light-v11"
       initialViewState={{ longitude: -6.7, latitude: 54.63, zoom: 7.8 }}
       style={{ width: '100%', height: '100%' }}
-      interactiveLayerIds={['stations-circle', 'key-stations-circle']}
+      interactiveLayerIds={onStationClick ? ['stations-circle', 'key-stations-circle'] : []}
       onClick={handleMapClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => { document.body.style.cursor = ''; setFarmHover(null) }}
@@ -424,7 +436,7 @@ export default function MapContainer({
           <Layer
             id="lake-label"
             type="symbol"
-            filter={['!=', ['get', 'label_text'], null]}
+            filter={['all', ['!=', ['get', 'label_text'], null], ['!', ['in', 'Lough Neagh', ['get', 'label_text']]]]}
             layout={{
               'text-field': ['get', 'label_text'],
               'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],

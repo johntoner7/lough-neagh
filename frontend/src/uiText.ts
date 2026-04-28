@@ -13,8 +13,6 @@ export const UI_TEXT = {
     baselineHeadline: 'In 1990, every river in this network exceeded the legal phosphorus limit. The algae blooms of 2023 had been building for decades.',
     baselineSubline: 'Press Play to see where progress was made, where it stalled, and what that means for the lough today.',
     aboveThresholdLabel: 'of rivers above legal threshold',
-    narrationSewage: 'Improvement driven by sewage works upgrades from the 1980s.',
-    narrationStalled: 'Progress stalled around 2008. Agricultural runoff is now the dominant source, and there is no equivalent regulatory intervention.',
     aboveThresholdSummary: (above: number, total: number, year: number) =>
       `${above} of ${total} monitored rivers exceed the legal phosphorus limit in ${year}`,
     noDataForYear: 'No data for this year',

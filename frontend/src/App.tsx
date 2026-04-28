@@ -1,19 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { fetchTimeSeries } from './api'
-import { KEY_STATION_CODES_ORDERED, YEAR_MIN, YEAR_MAX } from './constants'
+import { YEAR_MIN, YEAR_MAX } from './constants'
 import ControlsPanel from './components/ControlsPanel'
 import { useAppInit } from './hooks/useAppInit'
 import { useStationsFetch } from './hooks/useStationsFetch'
 import { useSummaryStats } from './hooks/useSummaryStats'
 import { useYearAnimation } from './hooks/useYearAnimation'
+import CinematicCaption from './components/CinematicCaption'
 import MapContainer from './components/MapContainer'
-import SparklinePanel from './components/SparklinePanel'
 import StationDetailDrawer from './components/StationDetailDrawer'
 import TimelineBar from './components/TimelineBar'
 import { UI_TEXT } from './uiText'
 
-import type { StationFeature, StationTimeSeries } from './types'
+import type { StationFeature } from './types'
 
 export default function App() {
   const { token, catchments, timeSeriesByCode, setTimeSeriesByCode, error } = useAppInit()
@@ -47,7 +47,11 @@ export default function App() {
 
   const handleTogglePlay = useCallback(() => {
     setIsPlaying(p => {
-      if (!p && year === YEAR_MAX) setYear(YEAR_MIN)
+      if (!p) {
+        if (year === YEAR_MAX) setYear(YEAR_MIN)
+        setDrawerOpen(false)
+        setSelectedFeature(null)
+      }
       return !p
     })
   }, [year])
@@ -74,15 +78,6 @@ export default function App() {
     setDrawerOpen(false)
     setSelectedFeature(null)
   }, [])
-
-  const allKeySeriesData = useMemo(() => {
-    const map = new Map<number, StationTimeSeries>()
-    for (const code of KEY_STATION_CODES_ORDERED) {
-      const series = timeSeriesByCode[code]
-      if (series) map.set(code, series)
-    }
-    return map
-  }, [timeSeriesByCode])
 
   if (error) {
     return (
@@ -114,7 +109,7 @@ export default function App() {
     : null
 
   return (
-    <div className="app-layout">
+    <div className={`app-layout${isPlaying ? ' app-layout--playing' : ''}`}>
       <section className="hero-section">
         <header className="app-header app-header--mini">
           <div className="app-header-title">{UI_TEXT.sidebar.title}</div>
@@ -136,8 +131,10 @@ export default function App() {
                 keyStationsData={keyStationsData}
                 selectedFeature={selectedFeature}
                 showFarmLayer={showFarmLayer}
-                onStationClick={handleStationClick}
+                onStationClick={isPlaying ? undefined : handleStationClick}
               />
+
+              {isPlaying && <CinematicCaption year={year} />}
 
               {drawerOpen && (
                 <button
@@ -172,15 +169,6 @@ export default function App() {
       </section>
 
       <TimelineBar year={year} onYearChange={handleYearChange} />
-
-      <SparklinePanel allSeries={allKeySeriesData} currentYear={year} />
-
-      <footer className="sparkline-methodology">
-        <p>{UI_TEXT.sidebar.methodology.line1}</p>
-        <p>{UI_TEXT.sidebar.methodology.line2}</p>
-        <p>{UI_TEXT.sidebar.methodology.line3}</p>
-        <p>{UI_TEXT.sidebar.methodology.source}</p>
-      </footer>
 
       <div className="floating-player">
         <button
