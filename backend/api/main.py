@@ -16,7 +16,7 @@ load_dotenv()
 
 from api.db import close_pool, get_conn
 from api.logging_config import configure_logging
-from api.routes import catchments, farms, lakes, stations
+from api.routes import catchments, farms, lakes, river_segments, stations
 from scripts.create_tables import main as create_tables
 from scripts.init_db import main as init_db
 
@@ -85,6 +85,7 @@ app.include_router(stations.router)
 app.include_router(catchments.router)
 app.include_router(lakes.router)
 app.include_router(farms.router)
+app.include_router(river_segments.router)
 
 
 @app.get("/config")
@@ -134,6 +135,7 @@ def root() -> dict:
             "catchments": "/catchments",
             "catchment_summary": "/catchments/{catchment_name}/summary?year={year}",
             "lakes_geojson": "/lakes/geojson",
+            "river_segments_geojson": "/river-segments/geojson?year={year}",
             "health": "/health",
             "docs": "/docs",
         },

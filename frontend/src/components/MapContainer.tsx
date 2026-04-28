@@ -30,7 +30,7 @@ interface FarmHover {
 export const KEY_STATION_CODES = new Set([10233, 10212, 10380, 10361, 10328, 10271])
 
 // ─── Threshold colour scale by P(SOL) concentration ──────────────────────────
-// null → grey; <0.035 → green; 0.035–0.1 → amber; >0.1 → red
+// null → grey; <0.035 → steel blue; 0.035–0.1 → amber; >0.1 → deep red
 
 const stationColor = [
   'case',
@@ -39,9 +39,9 @@ const stationColor = [
   [
     'step',
     ['get', 'metric_p_sol'],
-    '#4ade80',
-    0.035, '#fb923c',
-    0.1, '#dc2626',
+    '#4393c3',
+    0.035, '#f4a736',
+    0.1, '#d6604d',
   ],
 ] as unknown as ExpressionSpecification
 
@@ -60,6 +60,7 @@ const lakeStatusColor = [
 interface Props {
   token: string
   year: number
+  isPlaying: boolean
   stationsData: GeoJSONCollection
   keyStationsData: GeoJSONCollection
   selectedFeature: StationFeature | null
@@ -72,10 +73,10 @@ interface Props {
 const cattleColor = [
   'step',
   ['coalesce', ['get', 'cattle_per_ha'], 0],
-  '#4ade80',
-  0.5, '#fb923c',
-  1.5, '#dc2626',
-  2.5, '#991b1b',
+  '#fdf8e1',
+  0.5, '#7bc67e',
+  1.5, '#f4821f',
+  2.5, '#c0392b',
 ] as unknown as ExpressionSpecification
 
 const stationRadius = [
@@ -109,6 +110,7 @@ const selectedStationRadius = [
 export default function MapContainer({
   token,
   year,
+  isPlaying,
   stationsData,
   keyStationsData,
   selectedFeature,
@@ -117,7 +119,10 @@ export default function MapContainer({
 }: Props) {
   const mapRef = useRef<MapRef>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const farmFetchIdRef = useRef(0)
+  const farmCacheRef = useRef<globalThis.Map<number, GeoJSON.FeatureCollection>>(new globalThis.Map())
+  const farmRequestRef = useRef<globalThis.Map<number, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
+  const riverCacheRef = useRef<globalThis.Map<number, GeoJSON.FeatureCollection>>(new globalThis.Map())
+  const riverRequestRef = useRef<globalThis.Map<number, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
 
   useEffect(() => {
     const el = containerRef.current
@@ -129,6 +134,7 @@ export default function MapContainer({
     return () => observer.disconnect()
   }, [])
   const [lakePolygons, setLakePolygons] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [riverSegments, setRiverSegments] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
@@ -142,38 +148,128 @@ export default function MapContainer({
       .catch(err => console.error('Failed to fetch lakes:', err))
   }, [])
 
+  const fetchRiverSegments = useCallback((yr: number, signal?: AbortSignal) => {
+    const cached = riverCacheRef.current.get(yr)
+    if (cached) return Promise.resolve(cached)
+
+    const inflight = riverRequestRef.current.get(yr)
+    if (inflight) return inflight
+
+    const request = fetch(
+      `${API_BASE}/river-segments/geojson?year=${yr}&metric=rolling`,
+      signal ? { signal } : undefined,
+    )
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => {
+        const collection = data as GeoJSON.FeatureCollection
+        riverCacheRef.current.set(yr, collection)
+        return collection
+      })
+      .finally(() => { riverRequestRef.current.delete(yr) })
+
+    riverRequestRef.current.set(yr, request)
+    return request
+  }, [])
+
+  const prefetchRiverYear = useCallback((yr: number) => {
+    if (riverCacheRef.current.has(yr) || riverRequestRef.current.has(yr)) return
+    void fetchRiverSegments(yr).catch(() => {})
+  }, [fetchRiverSegments])
+
+  useEffect(() => {
+    const cached = riverCacheRef.current.get(year)
+    if (cached) {
+      setRiverSegments(cached)
+      if (isPlaying) prefetchRiverYear(year + 1)
+      return
+    }
+
+    const ctrl = new AbortController()
+    fetchRiverSegments(year, ctrl.signal)
+      .then(data => {
+        if (ctrl.signal.aborted) return
+        setRiverSegments(data)
+        if (isPlaying) prefetchRiverYear(year + 1)
+      })
+      .catch(err => {
+        if (ctrl.signal.aborted) return
+        console.error('Failed to fetch river segments:', err)
+      })
+    return () => ctrl.abort()
+  }, [year, isPlaying, fetchRiverSegments, prefetchRiverYear])
+
+  const fetchFarmPolygons = useCallback((farmYear: number, signal?: AbortSignal) => {
+    const cached = farmCacheRef.current.get(farmYear)
+    if (cached) return Promise.resolve(cached)
+
+    const inflight = farmRequestRef.current.get(farmYear)
+    if (inflight) return inflight
+
+    const request = fetch(`${API_BASE}/farms/geojson?year=${farmYear}`, signal ? { signal } : undefined)
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(data => {
+        const polygons = data as GeoJSON.FeatureCollection
+        farmCacheRef.current.set(farmYear, polygons)
+        return polygons
+      })
+      .finally(() => {
+        farmRequestRef.current.delete(farmYear)
+      })
+
+    farmRequestRef.current.set(farmYear, request)
+    return request
+  }, [])
+
+  const prefetchFarmYear = useCallback((farmYear: number) => {
+    if (farmYear < FARM_YEAR_MIN || farmYear > FARM_YEAR_MAX) return
+    if (farmCacheRef.current.has(farmYear) || farmRequestRef.current.has(farmYear)) return
+
+    void fetchFarmPolygons(farmYear).catch(err => {
+      console.warn(`Farm prefetch failed for year ${farmYear}:`, err)
+    })
+  }, [fetchFarmPolygons])
+
   useEffect(() => {
     if (!showFarmLayer) {
-      farmFetchIdRef.current += 1
       setFarmLayerLoading(false)
       setFarmLayerError(false)
-      setFarmPolygons(null)
       return
     }
 
     const farmYear = Math.max(FARM_YEAR_MIN, Math.min(FARM_YEAR_MAX, year))
-    const fetchId = ++farmFetchIdRef.current
+    const cached = farmCacheRef.current.get(farmYear)
+    if (cached) {
+      setFarmPolygons(cached)
+      setFarmLayerLoading(false)
+      setFarmLayerError(false)
+      if (isPlaying) prefetchFarmYear(farmYear + 1)
+      return
+    }
+
+    const controller = new AbortController()
     setFarmLayerLoading(true)
     setFarmLayerError(false)
-    setFarmPolygons(null)
 
-    fetch(`${API_BASE}/farms/geojson?year=${farmYear}`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    fetchFarmPolygons(farmYear, controller.signal)
       .then(data => {
-        if (farmFetchIdRef.current !== fetchId) return
-        setFarmPolygons(data as GeoJSON.FeatureCollection)
+        if (controller.signal.aborted) return
+        setFarmPolygons(data)
         setFarmLayerError(false)
+        if (isPlaying) prefetchFarmYear(farmYear + 1)
       })
       .catch(err => {
-        if (farmFetchIdRef.current !== fetchId) return
+        if (controller.signal.aborted) return
         console.error('Failed to fetch farms:', err)
+        setFarmPolygons(null)
         setFarmLayerError(true)
       })
       .finally(() => {
-        if (farmFetchIdRef.current !== fetchId) return
+        if (controller.signal.aborted) return
         setFarmLayerLoading(false)
       })
-  }, [year, showFarmLayer])
+
+    return () => controller.abort()
+  }, [year, showFarmLayer, isPlaying, fetchFarmPolygons, prefetchFarmYear])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
     if (!onStationClick) return
@@ -334,17 +430,17 @@ export default function MapContainer({
       </button>
       {legendOpen && (
         <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
-          <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (dots)</div>
+          <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (lines)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4393c3', flexShrink: 0 }} />
             <span>Low (&lt; 0.035 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#fb923c', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f4a736', flexShrink: 0 }} />
             <span>Above limit (0.035–0.1)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#dc2626', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#d6604d', flexShrink: 0 }} />
             <span>High (&gt; 0.1 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
@@ -356,19 +452,19 @@ export default function MapContainer({
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#4ade80', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fdf8e1', border: '1px solid #7bc67e', flexShrink: 0 }} />
                 <span>Low (&lt; 0.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fb923c', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#7bc67e', flexShrink: 0 }} />
                 <span>Medium (0.5–1.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#dc2626', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f4821f', flexShrink: 0 }} />
                 <span>High (1.5–2.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#991b1b', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#c0392b', flexShrink: 0 }} />
                 <span>Very high (&gt; 2.5 / ha)</span>
               </div>
             </>
@@ -382,7 +478,12 @@ export default function MapContainer({
       mapStyle="mapbox://styles/mapbox/light-v11"
       initialViewState={{ longitude: -6.7, latitude: 54.63, zoom: 7.8 }}
       style={{ width: '100%', height: '100%' }}
-      interactiveLayerIds={onStationClick ? ['stations-circle', 'key-stations-circle'] : []}
+      interactiveLayerIds={(() => {
+        const layers: string[] = []
+        if (onStationClick) layers.push('stations-circle', 'key-stations-circle')
+        layers.push('river-lines')
+        return layers
+      })()}
       onClick={handleMapClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={() => { document.body.style.cursor = ''; setFarmHover(null) }}
@@ -398,14 +499,14 @@ export default function MapContainer({
             type="fill"
             paint={{
               'fill-color': cattleColor,
-              'fill-opacity': 0.38,
+              'fill-opacity': 0.45,
             }}
           />
           <Layer
             id="farm-line"
             type="line"
             paint={{
-              'line-color': '#991b1b',
+              'line-color': '#c0392b',
               'line-opacity': 0.22,
               'line-width': 0.8,
             }}
@@ -455,6 +556,19 @@ export default function MapContainer({
         </Source>
       )}
 
+      {/* ── River segments: coloured by metric_p_sol, fetched per year from API ── */}
+      <Source id="river-segs" type="geojson" data={riverSegments ?? { type: 'FeatureCollection', features: [] }}>
+        <Layer
+          id="river-lines"
+          type="line"
+          paint={{
+            'line-color': stationColor,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 4],
+            'line-opacity': 0.95,
+          }}
+        />
+      </Source>
+
       {/* ── Layer 1: All stations — 5 px circles coloured by concentration ── */}
       <Source id="stations" type="geojson" data={stationsData as GeoJSON.FeatureCollection}>
         <Layer
@@ -463,7 +577,12 @@ export default function MapContainer({
           paint={{
             'circle-radius': stationRadius,
             'circle-color': stationColor,
-            'circle-opacity': 0.85,
+            // show points only at closer zooms to avoid clutter
+            'circle-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              7, 0,
+              10, 0.85,
+            ],
             'circle-stroke-width': [
               'interpolate', ['linear'], ['zoom'],
               7, 0.5,
@@ -482,7 +601,12 @@ export default function MapContainer({
           paint={{
             'circle-radius': keyStationRadius,
             'circle-color': stationColor,
-            'circle-opacity': 0.95,
+            // key stations show at slightly lower zoom than regular stations
+            'circle-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              7, 0,
+              9, 0.95,
+            ],
             'circle-stroke-width': [
               'interpolate', ['linear'], ['zoom'],
               7, 1.8,

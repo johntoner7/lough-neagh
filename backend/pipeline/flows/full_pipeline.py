@@ -11,11 +11,11 @@ import pandas as pd
 
 from backend.pipeline.ingest.farm_census import insert_farm_census
 from backend.pipeline.ingest.foi import load_and_clean_foi
-from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_stations, insert_waterbodies
+from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_river_segments, insert_stations, insert_waterbodies
 from backend.pipeline.ingest.lakes import load_lakes
 from backend.pipeline.ingest.wfd_sites import load_wfd_sites
 from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
-from backend.pipeline.process.join import enrich_stations
+from backend.pipeline.process.join import enrich_stations, join_segments_to_stations
 from backend.pipeline.process.metrics import (
     compute_annual_means,
     compute_rolling_means,
@@ -83,6 +83,13 @@ def compute_metrics(database_url: str) -> dict[str, int]:
     }
 
 
+def ingest_river_segments(enriched: gpd.GeoDataFrame, database_url: str) -> dict[str, int]:
+    engine = create_engine(database_url)
+    segments = join_segments_to_stations(enriched)
+    insert_river_segments(segments, engine)
+    return {"river_segments": len(segments)}
+
+
 def ingest_farms(database_url: str) -> dict[str, int]:
     engine = create_engine(database_url)
     n = insert_farm_census(engine)
@@ -115,11 +122,15 @@ def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
     metrics_summary = compute_metrics(database_url)
     print("  Metrics computed", flush=True)
 
+    print("  Ingesting river segments...", flush=True)
+    seg_summary = ingest_river_segments(enriched, database_url)
+    print("  River segments ingested", flush=True)
+
     print("  Ingesting farm census...", flush=True)
     farm_summary = ingest_farms(database_url)
     print("  Farm census ingested", flush=True)
 
-    return {**persist_summary, **metrics_summary, **farm_summary}
+    return {**persist_summary, **metrics_summary, **seg_summary, **farm_summary}
 
 
 if __name__ == "__main__":

@@ -86,3 +86,13 @@ def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY;"))
     lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False, chunksize=50)
+
+
+def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
+    """Truncate and reload the river_segments table."""
+    gdf = segments_gdf.copy()
+    # DB column is named 'geom'; rename the active geometry column to match
+    gdf = gdf.rename_geometry("geom")
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE river_segments RESTART IDENTITY;"))
+    gdf.to_postgis("river_segments", engine, if_exists="append", index=False, chunksize=500)

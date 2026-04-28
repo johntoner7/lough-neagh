@@ -127,6 +127,7 @@ export default function App() {
               <MapContainer
                 token={token}
                 year={year}
+                isPlaying={isPlaying}
                 stationsData={stationsData}
                 keyStationsData={keyStationsData}
                 selectedFeature={selectedFeature}

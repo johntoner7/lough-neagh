@@ -91,6 +91,16 @@ CREATE TABLE IF NOT EXISTS farm_census_wards (
     UNIQUE(ward_code, year)
 );
 
+CREATE TABLE IF NOT EXISTS river_segments (
+    id                   SERIAL PRIMARY KEY,
+    rseg_cd              TEXT NOT NULL UNIQUE,
+    rwb_cd               TEXT,
+    strahler             FLOAT,
+    nearest_station_code INTEGER,
+    nearest_dist_m       FLOAT,
+    geom                 GEOMETRY(LINESTRING, 29902) NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
 CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geometry);
 CREATE INDEX IF NOT EXISTS idx_lakes_geom ON lakes USING GIST(geometry);
@@ -99,6 +109,8 @@ CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year)
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_year_station ON annual_metrics(year, station_code);
+CREATE INDEX IF NOT EXISTS idx_river_segments_geom ON river_segments USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_river_segments_station ON river_segments(nearest_station_code);
 """
 
 

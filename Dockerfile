@@ -14,7 +14,6 @@ COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
 COPY backend/ ./
-COPY data/ ./data/
 
 ENV PYTHONPATH=/app
 
