@@ -22,6 +22,11 @@ from api.models import (
 
 router = APIRouter(prefix="/stations", tags=["stations"])
 
+# Keyed by (year, catchment, wfd_matched_only, with_data_only, metric, bbox).
+# Station data for a given year is immutable once published, so we hold the
+# serialised JSON bytes for the lifetime of the process.
+_geojson_cache: dict[tuple, bytes] = {}
+
 
 @router.get("/years", response_model=list[int])
 def get_years(response: Response) -> list[int]:
@@ -46,22 +51,16 @@ def _parse_bbox(bbox: Optional[str]) -> Optional[tuple[float, float, float, floa
         raise HTTPException(status_code=422, detail="bbox values must be numeric")
 
 
-@router.get("/geojson", response_model=StationCollection)
-def get_stations_geojson(
-    response: Response,
-    year: int = Query(..., description="Year to return annual metrics for"),
-    catchment: Optional[str] = Query(None, description="Filter to one named catchment"),
-    wfd_matched_only: bool = Query(False, description="Only return WFD-matched stations"),
-    with_data_only: bool = Query(False, description="Only return stations with annual data for the selected year"),
-    metric: str = Query("annual", pattern="^(annual|rolling)$", description="Metric used for map values: annual or rolling"),
-    bbox: Optional[str] = Query(None, description="Bounding box filter: minLon,minLat,maxLon,maxLat (WGS84)"),
-) -> StationCollection:
-    """Return all stations as a GeoJSON FeatureCollection for a given year."""
-    # Data is updated once a year; year-scoped responses are immutable once published.
-    response.headers["Cache-Control"] = "public, max-age=3600"
-
-    bbox_coords = _parse_bbox(bbox)
-
+def _fetch_stations_json(
+    year: int,
+    catchment: Optional[str],
+    wfd_matched_only: bool,
+    with_data_only: bool,
+    metric: str,
+    bbox: Optional[str],
+    bbox_coords: Optional[tuple[float, float, float, float]],
+) -> bytes:
+    """Run the DB query and return the serialised GeoJSON bytes."""
     sql = """
         SELECT
             s.station_code,
@@ -157,7 +156,30 @@ def get_stations_geojson(
         stations_with_data=stations_with_data,
         stations_above_threshold=stations_above_threshold,
     )
-    return StationCollection(features=features, metadata=metadata)
+    return StationCollection(features=features, metadata=metadata).model_dump_json().encode()
+
+
+@router.get("/geojson", response_class=Response)
+def get_stations_geojson(
+    year: int = Query(..., description="Year to return annual metrics for"),
+    catchment: Optional[str] = Query(None, description="Filter to one named catchment"),
+    wfd_matched_only: bool = Query(False, description="Only return WFD-matched stations"),
+    with_data_only: bool = Query(False, description="Only return stations with annual data for the selected year"),
+    metric: str = Query("annual", pattern="^(annual|rolling)$", description="Metric used for map values: annual or rolling"),
+    bbox: Optional[str] = Query(None, description="Bounding box filter: minLon,minLat,maxLon,maxLat (WGS84)"),
+) -> Response:
+    """Return all stations as a GeoJSON FeatureCollection for a given year."""
+    bbox_coords = _parse_bbox(bbox)
+    cache_key = (year, catchment, wfd_matched_only, with_data_only, metric, bbox)
+    if cache_key not in _geojson_cache:
+        _geojson_cache[cache_key] = _fetch_stations_json(
+            year, catchment, wfd_matched_only, with_data_only, metric, bbox, bbox_coords
+        )
+    return Response(
+        content=_geojson_cache[cache_key],
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.get("/{station_code}/timeseries", response_model=StationTimeSeries)
