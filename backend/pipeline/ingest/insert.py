@@ -93,6 +93,13 @@ def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
     gdf = segments_gdf.copy()
     # DB column is named 'geom'; rename the active geometry column to match
     gdf = gdf.rename_geometry("geom")
+    # If the GeoDataFrame contains duplicate rseg_cd values, drop them to
+    # avoid unique constraint violations during bulk copy.
+    if "rseg_cd" in gdf.columns:
+        dup_count = int(gdf["rseg_cd"].duplicated(keep=False).sum())
+        if dup_count:
+            print(f"Warning: {dup_count} duplicate rseg_cd values found — dropping duplicates before insert")
+            gdf = gdf.drop_duplicates(subset=["rseg_cd"])
     with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE river_segments RESTART IDENTITY;"))
+        conn.execute(text("TRUNCATE TABLE river_segments RESTART IDENTITY CASCADE;"))
     gdf.to_postgis("river_segments", engine, if_exists="append", index=False, chunksize=500)
