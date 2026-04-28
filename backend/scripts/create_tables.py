@@ -98,6 +98,7 @@ CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom ON farm_census_wards USING
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year);
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
+CREATE INDEX IF NOT EXISTS idx_annual_metrics_year_station ON annual_metrics(year, station_code);
 """
 
 
