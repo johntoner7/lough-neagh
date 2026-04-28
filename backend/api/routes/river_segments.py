@@ -14,7 +14,7 @@ router = APIRouter(prefix="/river-segments", tags=["river-segments"])
 
 # Segments whose nearest station is further than this are returned with null
 # metric (renders as grey) — they are too remote to have a meaningful reading.
-_MAX_STATION_DIST_M = 5_000
+_MAX_STATION_DIST_M = 8_000
 
 _geojson_cache: dict[tuple, bytes] = {}
 
