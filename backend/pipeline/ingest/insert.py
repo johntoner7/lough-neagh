@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point
+from shapely.geometry import Point, LineString, MultiLineString
+from shapely.ops import linemerge
 from sqlalchemy import text
 
 
@@ -100,6 +101,27 @@ def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
         if dup_count:
             print(f"Warning: {dup_count} duplicate rseg_cd values found — dropping duplicates before insert")
             gdf = gdf.drop_duplicates(subset=["rseg_cd"])
+
+    # Convert MultiLineString geometries to LineString to match DB column type.
+    def _to_linestring(geom):
+        if geom is None:
+            return None
+        if isinstance(geom, LineString):
+            return geom
+        if isinstance(geom, MultiLineString):
+            merged = linemerge(geom)
+            if isinstance(merged, LineString):
+                return merged
+            parts = list(merged.geoms) if hasattr(merged, "geoms") else list(geom.geoms)
+            if parts:
+                return max(parts, key=lambda g: g.length)
+        return geom
+
+    multi_count = int((gdf["geom"].geom_type == "MultiLineString").sum())
+    if multi_count:
+        print(f"Warning: {multi_count} MultiLineString geometries found — converting to LineString before insert")
+    gdf["geom"] = gdf["geom"].apply(lambda g: _to_linestring(g))
+
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE river_segments RESTART IDENTITY CASCADE;"))
     gdf.to_postgis("river_segments", engine, if_exists="append", index=False, chunksize=500)
