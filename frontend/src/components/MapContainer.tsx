@@ -88,14 +88,6 @@ const stationRadius = [
   12, 21,
 ] as unknown as ExpressionSpecification
 
-const keyStationRadius = [
-  'interpolate', ['exponential', 1.6], ['zoom'],
-  7, 8,
-  8, 12,
-  9, 17,
-  10, 23,
-  12, 32,
-] as unknown as ExpressionSpecification
 
 const selectedStationRadius = [
   'interpolate', ['exponential', 1.45], ['zoom'],
@@ -589,48 +581,6 @@ export default function MapContainer({
               13, 1.2,
             ],
             'circle-stroke-color': 'rgba(255,255,255,0.4)',
-          }}
-        />
-      </Source>
-
-      {/* ── Layer 2: 6 key Lough Neagh tributaries — larger, white-stroked ── */}
-      <Source id="key-stations" type="geojson" data={keyStationsData as GeoJSON.FeatureCollection}>
-        <Layer
-          id="key-stations-circle"
-          type="circle"
-          paint={{
-            'circle-radius': keyStationRadius,
-            'circle-color': stationColor,
-            // key stations show at slightly lower zoom than regular stations
-            'circle-opacity': [
-              'interpolate', ['linear'], ['zoom'],
-              7, 0,
-              9, 0.95,
-            ],
-            'circle-stroke-width': [
-              'interpolate', ['linear'], ['zoom'],
-              7, 1.8,
-              13, 3,
-            ],
-            'circle-stroke-color': '#ffffff',
-          }}
-        />
-        <Layer
-          id="key-stations-labels"
-          type="symbol"
-          layout={{
-            'text-field': ['coalesce', ['get', 'catchment_name'], ['get', 'location_name']],
-            'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-            'text-size': 11,
-            'text-offset': [0, 1.4],
-            'text-anchor': 'top',
-            'text-allow-overlap': true,
-          }}
-          paint={{
-            'text-color': '#2d2d2d',
-            'text-halo-color': 'rgba(255,255,255,0.9)',
-            'text-halo-width': 1.5,
-            'text-opacity': 0.9,
           }}
         />
       </Source>
