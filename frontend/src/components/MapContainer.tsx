@@ -113,8 +113,8 @@ export default function MapContainer({
   const containerRef = useRef<HTMLDivElement>(null)
   const farmCacheRef = useRef<globalThis.Map<number, GeoJSON.FeatureCollection>>(new globalThis.Map())
   const farmRequestRef = useRef<globalThis.Map<number, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
-  const riverCacheRef = useRef<globalThis.Map<number, GeoJSON.FeatureCollection>>(new globalThis.Map())
-  const riverRequestRef = useRef<globalThis.Map<number, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
+  const riverCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
+  const riverRequestRef = useRef<globalThis.Map<string, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
 
   useEffect(() => {
     const el = containerRef.current
@@ -140,48 +140,52 @@ export default function MapContainer({
       .catch(err => console.error('Failed to fetch lakes:', err))
   }, [])
 
-  const fetchRiverSegments = useCallback((yr: number, signal?: AbortSignal) => {
-    const cached = riverCacheRef.current.get(yr)
+  const fetchRiverSegments = useCallback((yr: number, metric: string, signal?: AbortSignal) => {
+    const key = `${yr}:${metric}`
+    const cached = riverCacheRef.current.get(key)
     if (cached) return Promise.resolve(cached)
 
-    const inflight = riverRequestRef.current.get(yr)
+    const inflight = riverRequestRef.current.get(key)
     if (inflight) return inflight
 
     const request = fetch(
-      `${API_BASE}/river-segments/geojson?year=${yr}&metric=rolling`,
+      `${API_BASE}/river-segments/geojson?year=${yr}&metric=${metric}`,
       signal ? { signal } : undefined,
     )
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
         const collection = data as GeoJSON.FeatureCollection
-        riverCacheRef.current.set(yr, collection)
+        riverCacheRef.current.set(key, collection)
         return collection
       })
-      .finally(() => { riverRequestRef.current.delete(yr) })
+      .finally(() => { riverRequestRef.current.delete(key) })
 
-    riverRequestRef.current.set(yr, request)
+    riverRequestRef.current.set(key, request)
     return request
   }, [])
 
-  const prefetchRiverYear = useCallback((yr: number) => {
-    if (riverCacheRef.current.has(yr) || riverRequestRef.current.has(yr)) return
-    void fetchRiverSegments(yr).catch(() => {})
+  const prefetchRiverYear = useCallback((yr: number, metric: string) => {
+    const key = `${yr}:${metric}`
+    if (riverCacheRef.current.has(key) || riverRequestRef.current.has(key)) return
+    void fetchRiverSegments(yr, metric).catch(() => {})
   }, [fetchRiverSegments])
 
   useEffect(() => {
-    const cached = riverCacheRef.current.get(year)
+    const metric = isPlaying ? 'annual' : 'rolling'
+    const key = `${year}:${metric}`
+    const cached = riverCacheRef.current.get(key)
     if (cached) {
       setRiverSegments(cached)
-      if (isPlaying) prefetchRiverYear(year + 1)
+      if (isPlaying) prefetchRiverYear(year + 1, metric)
       return
     }
 
     const ctrl = new AbortController()
-    fetchRiverSegments(year, ctrl.signal)
+    fetchRiverSegments(year, metric, ctrl.signal)
       .then(data => {
         if (ctrl.signal.aborted) return
         setRiverSegments(data)
-        if (isPlaying) prefetchRiverYear(year + 1)
+        if (isPlaying) prefetchRiverYear(year + 1, metric)
       })
       .catch(err => {
         if (ctrl.signal.aborted) return
