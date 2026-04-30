@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     logger.info("API starting up")
     _init_db()
     await init_pool()
+    asyncio.create_task(farms.warm_cache())
     yield
     await close_pool()
     logger.info("Connection pool closed")

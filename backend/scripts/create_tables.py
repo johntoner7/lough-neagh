@@ -101,10 +101,18 @@ CREATE TABLE IF NOT EXISTS river_segments (
     geom                 GEOMETRY(LINESTRING, 29902) NOT NULL
 );
 
+ALTER TABLE stations ADD COLUMN IF NOT EXISTS geom_4326 GEOMETRY(POINT, 4326);
+UPDATE stations SET geom_4326 = ST_Transform(geom, 4326) WHERE geom_4326 IS NULL AND geom IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
+CREATE INDEX IF NOT EXISTS idx_stations_geom_4326 ON stations USING GIST(geom_4326);
 CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geometry);
 CREATE INDEX IF NOT EXISTS idx_lakes_geom ON lakes USING GIST(geometry);
+ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS geom_simplified GEOMETRY(POLYGON, 4326);
+UPDATE farm_census_wards
+    SET geom_simplified = ST_SimplifyPreserveTopology(geometry, 0.001)
+    WHERE geom_simplified IS NULL AND geometry IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom ON farm_census_wards USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom_simplified ON farm_census_wards USING GIST(geom_simplified);
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year);
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);

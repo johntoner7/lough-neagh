@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -11,14 +10,7 @@ from psycopg.rows import dict_row
 
 from api.constants import WFD_THRESHOLD_MG_L
 from api.db import get_conn
-from api.models import (
-    CollectionMetadata,
-    StationCollection,
-    StationFeature,
-    StationProperties,
-    StationTimeSeries,
-    TimeSeriesPoint,
-)
+from api.models import StationTimeSeries, TimeSeriesPoint
 
 router = APIRouter(prefix="/stations", tags=["stations"])
 
@@ -59,103 +51,116 @@ async def _fetch_stations_json(
     bbox: Optional[str],
     bbox_coords: Optional[tuple[float, float, float, float]],
 ) -> bytes:
-    """Run the DB query and return the serialised GeoJSON bytes."""
+    """Run the DB query and return serialised GeoJSON bytes, assembled entirely in SQL."""
     sql = """
-        SELECT
-            s.station_code,
-            s.location_name,
-            s.catchment_name,
-            s.river_waterbody_id,
-            s.wfd_matched,
-            am.annual_mean_p_sol,
-            am.rolling_mean_5yr,
-            CASE
-                WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
-                ELSE am.annual_mean_p_sol
-            END AS metric_p_sol,
-            am.wfd_compliant,
-            am.sparse_year,
-            tr.trend_direction,
-            tr.significant        AS trend_significant,
-            tr.sens_slope,
-            ST_AsGeoJSON(ST_Transform(s.geom, 4326)) AS geometry_json
-        FROM stations s
-        LEFT JOIN annual_metrics am
-               ON s.station_code = am.station_code AND am.year = %(year)s
-        LEFT JOIN trend_results tr
-               ON s.station_code = tr.station_code
-        WHERE (%(catchment)s::text IS NULL OR s.catchment_name = %(catchment)s)
-          AND (%(wfd_matched_only)s = FALSE OR s.wfd_matched = TRUE)
-          AND (
-                %(with_data_only)s = FALSE
-                OR (
-                    CASE
-                        WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
-                        ELSE am.annual_mean_p_sol
-                    END
-                ) IS NOT NULL
-          )
-          AND (
-                %(bbox)s::text IS NULL
-                OR ST_Intersects(s.geom, ST_Transform(ST_MakeEnvelope(%(min_lon)s::float8, %(min_lat)s::float8, %(max_lon)s::float8, %(max_lat)s::float8, 4326), ST_SRID(s.geom)))
-          )
-        ORDER BY s.station_code
+        WITH station_data AS (
+            SELECT
+                s.station_code,
+                s.location_name,
+                s.catchment_name,
+                s.river_waterbody_id,
+                s.wfd_matched,
+                am.annual_mean_p_sol,
+                am.rolling_mean_5yr,
+                CASE
+                    WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                    ELSE am.annual_mean_p_sol
+                END AS metric_p_sol,
+                am.wfd_compliant,
+                am.sparse_year,
+                tr.trend_direction,
+                tr.significant        AS trend_significant,
+                tr.sens_slope,
+                s.geom_4326
+            FROM stations s
+            LEFT JOIN annual_metrics am
+                   ON s.station_code = am.station_code AND am.year = %(year)s
+            LEFT JOIN trend_results tr
+                   ON s.station_code = tr.station_code
+            WHERE (%(catchment)s::text IS NULL OR s.catchment_name = %(catchment)s)
+              AND (%(wfd_matched_only)s = FALSE OR s.wfd_matched = TRUE)
+              AND (
+                    %(with_data_only)s = FALSE
+                    OR (
+                        CASE
+                            WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                            ELSE am.annual_mean_p_sol
+                        END
+                    ) IS NOT NULL
+              )
+              AND (
+                    %(bbox)s::text IS NULL
+                    OR ST_Intersects(
+                        s.geom_4326,
+                        ST_MakeEnvelope(%(min_lon)s::float8, %(min_lat)s::float8, %(max_lon)s::float8, %(max_lat)s::float8, 4326)
+                    )
+              )
+        ),
+        agg AS (
+            SELECT
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'type',       'Feature',
+                            'geometry',   CASE WHEN geom_4326 IS NOT NULL THEN ST_AsGeoJSON(geom_4326)::json ELSE NULL END,
+                            'properties', json_build_object(
+                                'station_code',       station_code,
+                                'location_name',      location_name,
+                                'catchment_name',     catchment_name,
+                                'river_waterbody_id', river_waterbody_id,
+                                'wfd_matched',        wfd_matched,
+                                'annual_mean_p_sol',  annual_mean_p_sol,
+                                'rolling_mean_5yr',   rolling_mean_5yr,
+                                'metric_p_sol',       metric_p_sol,
+                                'wfd_compliant',      wfd_compliant,
+                                'sparse_year',        sparse_year,
+                                'trend_direction',    trend_direction,
+                                'trend_significant',  trend_significant,
+                                'sens_slope',         sens_slope
+                            )
+                        )
+                        ORDER BY station_code
+                    ),
+                    '[]'::json
+                )                                                                  AS features,
+                COUNT(*)::int                                                      AS total_stations,
+                COUNT(metric_p_sol)::int                                           AS stations_with_data,
+                COUNT(*) FILTER (WHERE metric_p_sol > %(threshold)s::float)::int   AS stations_above_threshold
+            FROM station_data
+        )
+        SELECT json_build_object(
+            'type',     'FeatureCollection',
+            'features', features,
+            'metadata', json_build_object(
+                'year',                     %(year)s::int,
+                'total_stations',           total_stations,
+                'stations_with_data',       stations_with_data,
+                'stations_above_threshold', stations_above_threshold,
+                'wfd_threshold_mg_l',       %(threshold)s::float,
+                'data_note',                NULL::text
+            )
+        )::text AS result
+        FROM agg
     """
     async with get_conn() as conn:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(
-                sql,
-                {
-                    "year": year,
-                    "catchment": catchment,
-                    "wfd_matched_only": wfd_matched_only,
-                    "with_data_only": with_data_only,
-                    "metric": metric,
-                    "bbox": bbox,
-                    "min_lon": bbox_coords[0] if bbox_coords else None,
-                    "min_lat": bbox_coords[1] if bbox_coords else None,
-                    "max_lon": bbox_coords[2] if bbox_coords else None,
-                    "max_lat": bbox_coords[3] if bbox_coords else None,
-                },
-            )
-            rows = await cur.fetchall()
-
-    features: list[StationFeature] = []
-    stations_with_data = 0
-    stations_above_threshold = 0
-
-    for row in rows:
-        geometry = json.loads(row["geometry_json"]) if row["geometry_json"] else None
-        props = StationProperties(
-            station_code=row["station_code"],
-            location_name=row["location_name"],
-            catchment_name=row["catchment_name"],
-            river_waterbody_id=row["river_waterbody_id"],
-            wfd_matched=row["wfd_matched"],
-            annual_mean_p_sol=row["annual_mean_p_sol"],
-            rolling_mean_5yr=row["rolling_mean_5yr"],
-            metric_p_sol=row["metric_p_sol"],
-            wfd_compliant=row["wfd_compliant"],
-            sparse_year=row["sparse_year"],
-            trend_direction=row["trend_direction"],
-            trend_significant=row["trend_significant"],
-            sens_slope=row["sens_slope"],
+        cur = await conn.execute(
+            sql,
+            {
+                "year": year,
+                "catchment": catchment,
+                "wfd_matched_only": wfd_matched_only,
+                "with_data_only": with_data_only,
+                "metric": metric,
+                "threshold": WFD_THRESHOLD_MG_L,
+                "bbox": bbox,
+                "min_lon": bbox_coords[0] if bbox_coords else None,
+                "min_lat": bbox_coords[1] if bbox_coords else None,
+                "max_lon": bbox_coords[2] if bbox_coords else None,
+                "max_lat": bbox_coords[3] if bbox_coords else None,
+            },
         )
-        features.append(StationFeature(geometry=geometry, properties=props))
-
-        metric_value = row["metric_p_sol"]
-        if metric_value is not None:
-            stations_with_data += 1
-            if float(metric_value) > WFD_THRESHOLD_MG_L:
-                stations_above_threshold += 1
-
-    metadata = CollectionMetadata(
-        year=year,
-        total_stations=len(features),
-        stations_with_data=stations_with_data,
-        stations_above_threshold=stations_above_threshold,
-    )
-    return StationCollection(features=features, metadata=metadata).model_dump_json().encode()
+        row = await cur.fetchone()
+    return (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
 
 
 @router.get("/geojson", response_class=Response)
