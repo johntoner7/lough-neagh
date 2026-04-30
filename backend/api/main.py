@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
     _init_db()
     await init_pool()
     asyncio.create_task(farms.warm_cache())
+    asyncio.create_task(river_segments.warm_cache())
     yield
     await close_pool()
     logger.info("Connection pool closed")

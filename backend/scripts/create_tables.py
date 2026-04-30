@@ -120,8 +120,13 @@ CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(sta
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_year_station ON annual_metrics(year, station_code);
 ALTER TABLE river_segments ADD COLUMN IF NOT EXISTS geom_4326 GEOMETRY(LINESTRING, 4326);
 UPDATE river_segments SET geom_4326 = ST_Transform(geom, 4326) WHERE geom_4326 IS NULL AND geom IS NOT NULL;
+ALTER TABLE river_segments ADD COLUMN IF NOT EXISTS geom_simplified GEOMETRY;
+UPDATE river_segments
+    SET geom_simplified = ST_SimplifyPreserveTopology(ST_Transform(geom, 4326), 0.001)
+    WHERE geom_simplified IS NULL AND geom IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_river_segments_geom ON river_segments USING GIST(geom);
 CREATE INDEX IF NOT EXISTS idx_river_segments_geom_4326 ON river_segments USING GIST(geom_4326);
+CREATE INDEX IF NOT EXISTS idx_river_segments_geom_simplified ON river_segments USING GIST(geom_simplified);
 CREATE INDEX IF NOT EXISTS idx_river_segments_station ON river_segments(nearest_station_code);
 """
 
