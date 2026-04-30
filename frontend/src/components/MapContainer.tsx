@@ -171,7 +171,7 @@ export default function MapContainer({
   }, [fetchRiverSegments])
 
   useEffect(() => {
-    const metric = isPlaying ? 'annual' : 'rolling'
+    const metric = 'annual'
     const key = `${year}:${metric}`
     const cached = riverCacheRef.current.get(key)
     if (cached) {

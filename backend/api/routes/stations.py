@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -12,12 +13,32 @@ from api.constants import WFD_THRESHOLD_MG_L
 from api.db import get_conn
 from api.models import StationTimeSeries, TimeSeriesPoint
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/stations", tags=["stations"])
 
 # Keyed by (year, catchment, wfd_matched_only, with_data_only, metric, bbox).
 # Station data for a given year is immutable once published, so we hold the
 # serialised JSON bytes for the lifetime of the process.
 _geojson_cache: dict[tuple, bytes] = {}
+
+_YEAR_MIN = 1990
+_YEAR_MAX = 2024
+
+
+async def warm_cache() -> None:
+    """Pre-fill cache for the default play parameters (rolling, all stations) across all years."""
+    for year in range(_YEAR_MIN, _YEAR_MAX + 1):
+        key = (year, None, False, True, "rolling", None)
+        if key in _geojson_cache:
+            continue
+        try:
+            _geojson_cache[key] = await _fetch_stations_json(
+                year, None, False, True, "rolling", None, None
+            )
+            logger.info("Station cache warmed for year %d", year)
+        except Exception:
+            logger.exception("Station cache warmup failed for year %d", year)
 
 
 @router.get("/years", response_model=list[int])
