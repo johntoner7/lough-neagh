@@ -107,7 +107,8 @@ CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
 CREATE INDEX IF NOT EXISTS idx_stations_geom_4326 ON stations USING GIST(geom_4326);
 CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geometry);
 CREATE INDEX IF NOT EXISTS idx_lakes_geom ON lakes USING GIST(geometry);
-ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS geom_simplified GEOMETRY(POLYGON, 4326);
+ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS geom_simplified GEOMETRY;
+ALTER TABLE farm_census_wards ALTER COLUMN geom_simplified TYPE GEOMETRY USING geom_simplified::geometry;
 UPDATE farm_census_wards
     SET geom_simplified = ST_SimplifyPreserveTopology(geometry, 0.001)
     WHERE geom_simplified IS NULL AND geometry IS NOT NULL;
