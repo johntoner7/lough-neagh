@@ -103,6 +103,12 @@ CREATE TABLE IF NOT EXISTS river_segments (
 
 ALTER TABLE stations ADD COLUMN IF NOT EXISTS geom_4326 GEOMETRY(POINT, 4326);
 UPDATE stations SET geom_4326 = ST_Transform(geom, 4326) WHERE geom_4326 IS NULL AND geom IS NOT NULL;
+CREATE TABLE IF NOT EXISTS geojson_cache (
+    cache_key  TEXT PRIMARY KEY,
+    data       BYTEA NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_stations_geom ON stations USING GIST(geom);
 CREATE INDEX IF NOT EXISTS idx_stations_geom_4326 ON stations USING GIST(geom_4326);
 CREATE INDEX IF NOT EXISTS idx_waterbodies_geom ON waterbodies USING GIST(geometry);

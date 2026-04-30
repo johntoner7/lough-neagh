@@ -15,7 +15,7 @@ router = APIRouter(prefix="/river-segments", tags=["river-segments"])
 
 # Segments whose nearest station is further than this are returned with null
 # metric (renders as grey) — they are too remote to have a meaningful reading.
-_MAX_STATION_DIST_M = 8_000
+_MAX_STATION_DIST_M = 10_000
 
 # Simplification tolerance in degrees (~110 m) and decimal places for GeoJSON.
 # At NI national scale (zoom 8–10), sub-100m precision is invisible.
@@ -65,6 +65,18 @@ _SQL = """
 
 
 async def _fetch_segments_json(year: int, metric: str) -> bytes:
+    db_key = f"river_segments_{metric}_{year}"
+
+    # L2: shared DB cache — survives across workers and restarts.
+    async with get_conn() as conn:
+        cur = await conn.execute(
+            "SELECT data FROM geojson_cache WHERE cache_key = %s", [db_key]
+        )
+        row = await cur.fetchone()
+        if row:
+            return bytes(row[0])
+
+    # Cache miss — compute, then store for all workers.
     async with get_conn() as conn:
         cur = await conn.execute(
             _SQL,
@@ -77,7 +89,18 @@ async def _fetch_segments_json(year: int, metric: str) -> bytes:
             },
         )
         row = await cur.fetchone()
-    return (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
+    result = (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
+
+    try:
+        async with get_conn() as conn:
+            await conn.execute(
+                "INSERT INTO geojson_cache (cache_key, data) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                [db_key, result],
+            )
+    except Exception:
+        logger.warning("Failed to write segment cache for key %s", db_key)
+
+    return result
 
 
 async def warm_cache() -> None:
