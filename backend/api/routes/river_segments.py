@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
-from psycopg.rows import dict_row
 
 from api.db import get_conn
 
@@ -21,39 +18,41 @@ _geojson_cache: dict[tuple, bytes] = {}
 
 async def _fetch_segments_json(year: int, metric: str) -> bytes:
     sql = """
-        SELECT
-            CASE
-                WHEN rs.nearest_dist_m > %(max_dist)s THEN NULL
-                WHEN %(metric)s = 'rolling'
-                    THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
-                ELSE am.annual_mean_p_sol
-            END AS metric_p_sol,
-            ST_AsGeoJSON(ST_Transform(rs.geom, 4326)) AS geometry_json
-        FROM river_segments rs
-        LEFT JOIN annual_metrics am
-               ON am.station_code = rs.nearest_station_code
-              AND am.year = %(year)s
-        ORDER BY rs.id
+        WITH seg_data AS (
+            SELECT
+                rs.id,
+                CASE
+                    WHEN rs.nearest_dist_m > %(max_dist)s THEN NULL
+                    WHEN %(metric)s = 'rolling'
+                        THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                    ELSE am.annual_mean_p_sol
+                END AS metric_p_sol,
+                COALESCE(rs.geom_4326, ST_Transform(rs.geom, 4326)) AS geom
+            FROM river_segments rs
+            LEFT JOIN annual_metrics am
+                   ON am.station_code = rs.nearest_station_code
+                  AND am.year = %(year)s
+        )
+        SELECT json_build_object(
+            'type', 'FeatureCollection',
+            'features', COALESCE(
+                json_agg(
+                    json_build_object(
+                        'type',       'Feature',
+                        'geometry',   CASE WHEN geom IS NOT NULL THEN ST_AsGeoJSON(geom)::json ELSE NULL END,
+                        'properties', json_build_object('metric_p_sol', metric_p_sol)
+                    )
+                    ORDER BY id
+                ),
+                '[]'::json
+            )
+        )::text AS result
+        FROM seg_data
     """
     async with get_conn() as conn:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(sql, {"year": year, "metric": metric, "max_dist": _MAX_STATION_DIST_M})
-            rows = await cur.fetchall()
-
-    features = []
-    for row in rows:
-        geometry = json.loads(row["geometry_json"]) if row["geometry_json"] else None
-        features.append({
-            "type": "Feature",
-            "geometry": geometry,
-            "properties": {
-                "metric_p_sol": (
-                    float(row["metric_p_sol"]) if row["metric_p_sol"] is not None else None
-                ),
-            },
-        })
-
-    return json.dumps({"type": "FeatureCollection", "features": features}).encode()
+        cur = await conn.execute(sql, {"year": year, "metric": metric, "max_dist": _MAX_STATION_DIST_M})
+        row = await cur.fetchone()
+    return (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
 
 
 @router.get("/geojson", response_class=Response)
