@@ -553,7 +553,13 @@ export default function MapContainer({
       )}
 
       {/* ── River segments: coloured by metric_p_sol, fetched per year from API ── */}
-      <Source id="river-segs" type="geojson" data={riverSegments ?? { type: 'FeatureCollection', features: [] }}>
+      <Source
+        id="river-segs"
+        // Ensure the Source remounts (and Mapbox reloads data) when year/metric change
+        key={`${year}:${isPlaying ? 'annual' : 'rolling'}`}
+        type="geojson"
+        data={riverSegments ?? { type: 'FeatureCollection', features: [] }}
+      >
         <Layer
           id="river-lines"
           type="line"
