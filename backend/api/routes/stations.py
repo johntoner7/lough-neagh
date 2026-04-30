@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from psycopg.rows import dict_row
 
 from api.constants import WFD_THRESHOLD_MG_L
 from api.db import get_conn
@@ -29,13 +29,12 @@ _geojson_cache: dict[tuple, bytes] = {}
 
 
 @router.get("/years", response_model=list[int])
-def get_years(response: Response) -> list[int]:
+async def get_years(response: Response) -> list[int]:
     """Return the list of years available in the dataset."""
     response.headers["Cache-Control"] = "public, max-age=86400"
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT DISTINCT year FROM annual_metrics ORDER BY year")
-            return [row[0] for row in cur.fetchall()]
+    async with get_conn() as conn:
+        cur = await conn.execute("SELECT DISTINCT year FROM annual_metrics ORDER BY year")
+        return [row[0] for row in await cur.fetchall()]
 
 
 def _parse_bbox(bbox: Optional[str]) -> Optional[tuple[float, float, float, float]]:
@@ -51,7 +50,7 @@ def _parse_bbox(bbox: Optional[str]) -> Optional[tuple[float, float, float, floa
         raise HTTPException(status_code=422, detail="bbox values must be numeric")
 
 
-def _fetch_stations_json(
+async def _fetch_stations_json(
     year: int,
     catchment: Optional[str],
     wfd_matched_only: bool,
@@ -102,9 +101,9 @@ def _fetch_stations_json(
           )
         ORDER BY s.station_code
     """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(
                 sql,
                 {
                     "year": year,
@@ -119,7 +118,7 @@ def _fetch_stations_json(
                     "max_lat": bbox_coords[3] if bbox_coords else None,
                 },
             )
-            rows = cur.fetchall()
+            rows = await cur.fetchall()
 
     features: list[StationFeature] = []
     stations_with_data = 0
@@ -160,7 +159,7 @@ def _fetch_stations_json(
 
 
 @router.get("/geojson", response_class=Response)
-def get_stations_geojson(
+async def get_stations_geojson(
     year: int = Query(..., description="Year to return annual metrics for"),
     catchment: Optional[str] = Query(None, description="Filter to one named catchment"),
     wfd_matched_only: bool = Query(False, description="Only return WFD-matched stations"),
@@ -172,7 +171,7 @@ def get_stations_geojson(
     bbox_coords = _parse_bbox(bbox)
     cache_key = (year, catchment, wfd_matched_only, with_data_only, metric, bbox)
     if cache_key not in _geojson_cache:
-        _geojson_cache[cache_key] = _fetch_stations_json(
+        _geojson_cache[cache_key] = await _fetch_stations_json(
             year, catchment, wfd_matched_only, with_data_only, metric, bbox, bbox_coords
         )
     return Response(
@@ -183,7 +182,7 @@ def get_stations_geojson(
 
 
 @router.get("/{station_code}/timeseries", response_model=StationTimeSeries)
-def get_station_timeseries(station_code: int, response: Response) -> StationTimeSeries:
+async def get_station_timeseries(station_code: int, response: Response) -> StationTimeSeries:
     """Return the full 1990–2024 time series for a single station."""
     response.headers["Cache-Control"] = "public, max-age=86400"
     station_sql = """
@@ -210,15 +209,15 @@ def get_station_timeseries(station_code: int, response: Response) -> StationTime
         WHERE station_code = %(station_code)s
         ORDER BY year
     """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(station_sql, {"station_code": station_code})
-            station_row = cur.fetchone()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(station_sql, {"station_code": station_code})
+            station_row = await cur.fetchone()
             if station_row is None:
                 raise HTTPException(status_code=404, detail=f"Station {station_code} not found")
 
-            cur.execute(series_sql, {"station_code": station_code})
-            series_rows = cur.fetchall()
+            await cur.execute(series_sql, {"station_code": station_code})
+            series_rows = await cur.fetchall()
 
     series = [
         TimeSeriesPoint(

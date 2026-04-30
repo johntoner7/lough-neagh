@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-import psycopg2.extras
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
+from psycopg.rows import dict_row
 
 from api.db import get_conn
 
@@ -19,7 +19,7 @@ _MAX_STATION_DIST_M = 8_000
 _geojson_cache: dict[tuple, bytes] = {}
 
 
-def _fetch_segments_json(year: int, metric: str) -> bytes:
+async def _fetch_segments_json(year: int, metric: str) -> bytes:
     sql = """
         SELECT
             CASE
@@ -35,10 +35,10 @@ def _fetch_segments_json(year: int, metric: str) -> bytes:
               AND am.year = %(year)s
         ORDER BY rs.id
     """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, {"year": year, "metric": metric, "max_dist": _MAX_STATION_DIST_M})
-            rows = cur.fetchall()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql, {"year": year, "metric": metric, "max_dist": _MAX_STATION_DIST_M})
+            rows = await cur.fetchall()
 
     features = []
     for row in rows:
@@ -57,7 +57,7 @@ def _fetch_segments_json(year: int, metric: str) -> bytes:
 
 
 @router.get("/geojson", response_class=Response)
-def get_river_segments_geojson(
+async def get_river_segments_geojson(
     year: int = Query(..., description="Year to colour segments by"),
     metric: str = Query("rolling", pattern="^(annual|rolling)$"),
 ) -> Response:
@@ -65,7 +65,7 @@ def get_river_segments_geojson(
     annual phosphorus metric for the given year."""
     cache_key = (year, metric)
     if cache_key not in _geojson_cache:
-        _geojson_cache[cache_key] = _fetch_segments_json(year, metric)
+        _geojson_cache[cache_key] = await _fetch_segments_json(year, metric)
     return Response(
         content=_geojson_cache[cache_key],
         media_type="application/json",

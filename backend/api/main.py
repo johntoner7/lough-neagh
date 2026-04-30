@@ -11,10 +11,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from psycopg_pool import PoolTimeout
 
 load_dotenv()
 
-from api.db import close_pool, get_conn
+from api.db import close_pool, get_conn, init_pool
 from api.logging_config import configure_logging
 from api.routes import catchments, farms, lakes, river_segments, stations
 from scripts.create_tables import main as create_tables
@@ -37,8 +39,9 @@ def _init_db() -> None:
 async def lifespan(app: FastAPI):
     logger.info("API starting up")
     _init_db()
+    await init_pool()
     yield
-    close_pool()
+    await close_pool()
     logger.info("Connection pool closed")
 
 
@@ -81,6 +84,12 @@ async def log_requests(request: Request, call_next):
     return response
 
 
+@app.exception_handler(PoolTimeout)
+async def pool_timeout_handler(request: Request, exc: PoolTimeout):
+    logger.warning("Connection pool timeout: %s", exc)
+    return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable, please retry"})
+
+
 app.include_router(stations.router)
 app.include_router(catchments.router)
 app.include_router(lakes.router)
@@ -95,12 +104,11 @@ def get_config() -> dict:
 
 
 @app.get("/health")
-def health() -> dict:
+async def health() -> dict:
     """Health check — also verifies database connectivity."""
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
+        async with get_conn() as conn:
+            await conn.execute("SELECT 1")
         db_status = "connected"
     except Exception:
         logger.exception("Database health check failed")
@@ -109,14 +117,13 @@ def health() -> dict:
 
 
 @app.get("/")
-def root() -> dict:
+async def root() -> dict:
     """API description and available year range."""
     try:
-        with get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT MIN(year), MAX(year) FROM annual_metrics")
-                row = cur.fetchone()
-                min_year, max_year = (row[0], row[1]) if row and row[0] else (None, None)
+        async with get_conn() as conn:
+            cur = await conn.execute("SELECT MIN(year), MAX(year) FROM annual_metrics")
+            row = await cur.fetchone()
+            min_year, max_year = (row[0], row[1]) if row and row[0] else (None, None)
     except Exception:
         logger.exception("Failed to fetch year range")
         min_year, max_year = None, None

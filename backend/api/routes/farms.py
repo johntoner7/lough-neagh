@@ -6,6 +6,7 @@ import json
 
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
+from psycopg.rows import dict_row
 
 from api.db import get_conn
 from api.models import FarmCollection, FarmCollectionMetadata, FarmFeature, FarmProperties
@@ -21,7 +22,7 @@ def _clamp_year(year: int) -> int:
 
 
 @router.get("/geojson", response_model=FarmCollection)
-def get_farms_geojson(
+async def get_farms_geojson(
     response: Response,
     year: int = Query(2024, description="Year for farm census data (2015–2024)"),
 ) -> FarmCollection:
@@ -57,21 +58,19 @@ def get_farms_geojson(
         ORDER BY ward_name
     """
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, {"year": census_year})
-            rows = cur.fetchall()
-            cols = [desc[0] for desc in cur.description]
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql, {"year": census_year})
+            rows = await cur.fetchall()
 
     features = []
     for row in rows:
-        r = dict(zip(cols, row))
-        geom_json = r.pop("geometry_json")
+        geom_json = row.pop("geometry_json")
         if not geom_json:
             continue
         features.append(FarmFeature(
             geometry=json.loads(geom_json),
-            properties=FarmProperties(**r),
+            properties=FarmProperties(**row),
         ))
 
     return FarmCollection(

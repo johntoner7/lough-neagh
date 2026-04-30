@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-import psycopg2.extras
 from fastapi import APIRouter
 from fastapi.responses import Response
+from psycopg.rows import dict_row
 
 from api.db import get_conn
 from api.models import LakeCollection, LakeFeature, LakeProperties
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/lakes", tags=["lakes"])
 
 
 @router.get("/geojson", response_model=LakeCollection)
-def get_lakes_geojson(response: Response) -> LakeCollection:
+async def get_lakes_geojson(response: Response) -> LakeCollection:
     """
     Fetch all lake polygons as a GeoJSON FeatureCollection.
 
@@ -40,10 +40,10 @@ def get_lakes_geojson(response: Response) -> LakeCollection:
     # Lake WFD data is updated annually — safe to cache for 24 hours.
     response.headers["Cache-Control"] = "public, max-age=86400"
 
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql)
-            rows = cur.fetchall()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql)
+            rows = await cur.fetchall()
 
     features = []
     for row in rows:

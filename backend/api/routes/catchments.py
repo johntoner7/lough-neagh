@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import psycopg2.extras
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
+from psycopg.rows import dict_row
 
 from api.db import get_conn
 from api.models import CatchmentSummary, StationProperties
@@ -13,20 +13,19 @@ router = APIRouter(prefix="/catchments", tags=["catchments"])
 
 
 @router.get("", response_model=list[str])
-def list_catchments(response: Response) -> list[str]:
+async def list_catchments(response: Response) -> list[str]:
     """Return distinct catchment names from the stations table."""
     response.headers["Cache-Control"] = "public, max-age=86400"
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT DISTINCT catchment_name FROM stations "
-                "WHERE catchment_name IS NOT NULL ORDER BY catchment_name"
-            )
-            return [row[0] for row in cur.fetchall()]
+    async with get_conn() as conn:
+        cur = await conn.execute(
+            "SELECT DISTINCT catchment_name FROM stations "
+            "WHERE catchment_name IS NOT NULL ORDER BY catchment_name"
+        )
+        return [row[0] for row in await cur.fetchall()]
 
 
 @router.get("/{catchment_name}/summary", response_model=CatchmentSummary)
-def get_catchment_summary(
+async def get_catchment_summary(
     catchment_name: str,
     response: Response,
     year: int = Query(..., description="Year to compute summary for"),
@@ -55,10 +54,10 @@ def get_catchment_summary(
         WHERE s.catchment_name = %(catchment_name)s
         ORDER BY s.station_code
     """
-    with get_conn() as conn:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-            cur.execute(sql, {"year": year, "catchment_name": catchment_name})
-            rows = cur.fetchall()
+    async with get_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql, {"year": year, "catchment_name": catchment_name})
+            rows = await cur.fetchall()
 
     if not rows:
         raise HTTPException(status_code=404, detail=f"Catchment '{catchment_name}' not found")
