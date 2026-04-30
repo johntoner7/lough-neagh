@@ -16,16 +16,20 @@ router = APIRouter(prefix="/farms", tags=["farms"])
 _CENSUS_MIN_YEAR = 2015
 _CENSUS_MAX_YEAR = 2024
 
+# Farm census data is static for a given year; cache serialised JSON bytes to
+# make repeated requests (e.g. play-button ticks) sub-millisecond.
+_geojson_cache: dict[int, bytes] = {}
+
 
 def _clamp_year(year: int) -> int:
     return max(_CENSUS_MIN_YEAR, min(_CENSUS_MAX_YEAR, year))
 
 
-@router.get("/geojson", response_model=FarmCollection)
+@router.get("/geojson")
 async def get_farms_geojson(
     response: Response,
     year: int = Query(2024, description="Year for farm census data (2015–2024)"),
-) -> FarmCollection:
+) -> Response:
     """
     Farm census ward polygons as a GeoJSON FeatureCollection.
 
@@ -40,6 +44,9 @@ async def get_farms_geojson(
     """
     census_year = _clamp_year(year)
     response.headers["Cache-Control"] = "public, max-age=86400"
+
+    if census_year in _geojson_cache:
+        return Response(content=_geojson_cache[census_year], media_type="application/json")
 
     sql = """
         SELECT
@@ -73,10 +80,13 @@ async def get_farms_geojson(
             properties=FarmProperties(**row),
         ))
 
-    return FarmCollection(
+    collection = FarmCollection(
         features=features,
         metadata=FarmCollectionMetadata(year=census_year),
     )
+    body = collection.model_dump_json().encode()
+    _geojson_cache[census_year] = body
+    return Response(content=body, media_type="application/json")
 
 
 @router.get("/years")

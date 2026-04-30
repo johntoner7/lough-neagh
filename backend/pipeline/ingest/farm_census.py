@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
-import csv
-import json
-import re
-from collections import defaultdict
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import shape
 from sqlalchemy import text
 
 _DATA_ROOT = Path(__file__).parents[3] / "data" / "raw" / "farms"
@@ -19,7 +14,7 @@ WARDS_GEOJSON = _DATA_ROOT / "osni_open_data_largescale_boundaries_wards_2012.ge
 
 CENSUS_YEARS = list(range(2015, 2025))
 
-METRICS = {
+_METRIC_LABELS = {
     "Cattle": "cattle",
     "Sheep": "sheep",
     "Pigs": "pigs",
@@ -35,11 +30,6 @@ def _find_census_csv() -> Path:
     return candidates[-1]
 
 
-def _strip_suffix(name: str) -> str:
-    """Remove council disambiguation suffix e.g. '(NORTH DOWN AND ARDS)'."""
-    return re.sub(r"\s*\([^)]+\)\s*$", "", name.upper()).strip()
-
-
 def load_farm_census() -> gpd.GeoDataFrame:
     """
     Join NISRA farm census CSV with OSNI ward boundaries.
@@ -49,78 +39,65 @@ def load_farm_census() -> gpd.GeoDataFrame:
     """
     census_csv = _find_census_csv()
 
-    with open(WARDS_GEOJSON) as f:
-        geo = json.load(f)
+    # Read ward geometries via geopandas — avoids manual json.load + shapely.shape per feature
+    wards = gpd.read_file(WARDS_GEOJSON)[["WardCode", "WARDNAME", "geometry"]].rename(
+        columns={"WardCode": "ward_code", "WARDNAME": "ward_name"}
+    )
+    wards["_key"] = wards["ward_name"].str.upper()
 
-    geo_lookup: dict[str, list[dict]] = defaultdict(list)
-    for feat in geo["features"]:
-        props = feat["properties"]
-        key = props["WARDNAME"].upper()
-        geo_lookup[key].append({
-            "ward_code": props["WardCode"],
-            "ward_name": props["WARDNAME"],
-            "geometry": shape(feat["geometry"]),
-        })
+    # Vectorised CSV load — faster than csv.DictReader row-by-row
+    raw = pd.read_csv(census_csv, encoding="utf-8-sig")
+    raw = raw[
+        raw["Statistic Label"].isin(_METRIC_LABELS)
+        & (raw["Ward"] != "Northern Ireland")
+        & raw["VALUE"].notna()
+    ].copy()
+    raw["year"] = pd.to_numeric(raw["Year"], errors="coerce").astype("Int64")
+    raw["value"] = pd.to_numeric(raw["VALUE"], errors="coerce")
+    raw = raw[raw["year"].isin(CENSUS_YEARS)]
+    raw["metric"] = raw["Statistic Label"].map(_METRIC_LABELS)
+    raw["_key"] = (
+        raw["Ward"]
+        .str.upper()
+        .str.replace(r"\s*\([^)]+\)\s*$", "", regex=True)
+        .str.strip()
+    )
 
-    census: dict[str, dict[int, dict[str, float]]] = defaultdict(lambda: defaultdict(dict))
-    with open(census_csv, encoding="utf-8-sig") as f:
-        for row in csv.DictReader(f):
-            label = row["Statistic Label"]
-            if label not in METRICS or row["Ward"] == "Northern Ireland" or not row["VALUE"]:
-                continue
-            try:
-                year = int(row["Year"])
-                value = float(row["VALUE"])
-            except ValueError:
-                continue
-            if year not in CENSUS_YEARS:
-                continue
-            key = _strip_suffix(row["Ward"])
-            census[key][year][METRICS[label]] = value
+    # Pivot to wide format: one row per (ward_key, year), one column per metric
+    pivot = raw.pivot_table(
+        index=["_key", "year"], columns="metric", values="value", aggfunc="first"
+    ).reset_index()
+    pivot.columns.name = None
 
-    records = []
-    for geo_key, geo_entries in geo_lookup.items():
-        ward_data = census.get(geo_key, {})
+    # Expand wards × years then merge census data — replaces the nested dict loop
+    wards_expanded = wards.loc[wards.index.repeat(len(CENSUS_YEARS))].reset_index(drop=True)
+    wards_expanded["year"] = CENSUS_YEARS * len(wards)
+    merged = wards_expanded.merge(pivot, on=["_key", "year"], how="left").drop(columns="_key")
 
-        for year in CENSUS_YEARS:
-            year_data = ward_data.get(year, {})
-            cattle = int(year_data.get("cattle", 0)) or None
-            sheep = int(year_data.get("sheep", 0)) or None
-            pigs = int(year_data.get("pigs", 0)) or None
-            num_farms = int(year_data.get("num_farms", 0)) or None
-            area_ha = year_data.get("area_ha") or None
+    # Zero → None: matches original "0 means no data" convention
+    for col in ("cattle", "sheep", "pigs", "num_farms", "area_ha"):
+        if col in merged.columns:
+            merged[col] = merged[col].replace({0: None})
 
-            cattle_per_ha = round(cattle / area_ha, 3) if cattle and area_ha else None
-            lu = ((cattle or 0) + (sheep or 0) * 0.15 + (pigs or 0) * 0.25)
-            lu_per_ha = round(lu / area_ha, 3) if lu and area_ha else None
+    # Derived density metrics
+    merged["cattle_per_ha"] = (merged["cattle"] / merged["area_ha"]).round(3)
+    lu = (
+        merged["cattle"].fillna(0)
+        + merged["sheep"].fillna(0) * 0.15
+        + merged["pigs"].fillna(0) * 0.25
+    )
+    merged["lu_per_ha"] = (lu.where(lu > 0) / merged["area_ha"]).round(3)
 
-            for entry in geo_entries:
-                records.append({
-                    "ward_name": entry["ward_name"],
-                    "ward_code": entry["ward_code"],
-                    "year": year,
-                    "num_farms": num_farms,
-                    "area_ha": area_ha,
-                    "cattle": cattle,
-                    "sheep": sheep,
-                    "pigs": pigs,
-                    "cattle_per_ha": cattle_per_ha,
-                    "lu_per_ha": lu_per_ha,
-                    "geometry": entry["geometry"],
-                })
-
-    gdf = gpd.GeoDataFrame(records, geometry="geometry", crs="EPSG:4326")
     for col in ("num_farms", "cattle", "sheep", "pigs"):
-        gdf[col] = pd.to_numeric(gdf[col], errors="coerce").astype("Int64")
-    return gdf
+        merged[col] = pd.to_numeric(merged[col], errors="coerce").astype("Int64")
+
+    return gpd.GeoDataFrame(merged, geometry="geometry", crs="EPSG:4326")
 
 
 def insert_farm_census(engine) -> int:
     """Truncate and reload farm_census_wards table. Returns row count inserted."""
     gdf = load_farm_census()
-
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY;"))
-    gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False)
-
+    gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False, chunksize=500)
     return len(gdf)

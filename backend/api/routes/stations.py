@@ -70,7 +70,7 @@ async def _fetch_stations_json(
             am.annual_mean_p_sol,
             am.rolling_mean_5yr,
             CASE
-                WHEN %(metric)s = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
                 ELSE am.annual_mean_p_sol
             END AS metric_p_sol,
             am.wfd_compliant,
@@ -84,20 +84,20 @@ async def _fetch_stations_json(
                ON s.station_code = am.station_code AND am.year = %(year)s
         LEFT JOIN trend_results tr
                ON s.station_code = tr.station_code
-        WHERE (%(catchment)s IS NULL OR s.catchment_name = %(catchment)s)
+        WHERE (%(catchment)s::text IS NULL OR s.catchment_name = %(catchment)s)
           AND (%(wfd_matched_only)s = FALSE OR s.wfd_matched = TRUE)
           AND (
                 %(with_data_only)s = FALSE
                 OR (
                     CASE
-                        WHEN %(metric)s = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
+                        WHEN %(metric)s::text = 'rolling' THEN COALESCE(am.rolling_mean_5yr, am.annual_mean_p_sol)
                         ELSE am.annual_mean_p_sol
                     END
                 ) IS NOT NULL
           )
           AND (
-                %(bbox)s IS NULL
-                OR ST_Intersects(s.geom, ST_Transform(ST_MakeEnvelope(%(min_lon)s, %(min_lat)s, %(max_lon)s, %(max_lat)s, 4326), ST_SRID(s.geom)))
+                %(bbox)s::text IS NULL
+                OR ST_Intersects(s.geom, ST_Transform(ST_MakeEnvelope(%(min_lon)s::float8, %(min_lat)s::float8, %(max_lon)s::float8, %(max_lat)s::float8, 4326), ST_SRID(s.geom)))
           )
         ORDER BY s.station_code
     """
