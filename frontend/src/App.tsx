@@ -10,7 +10,6 @@ import { useYearAnimation } from './hooks/useYearAnimation'
 import CinematicCaption from './components/CinematicCaption'
 import MapContainer from './components/MapContainer'
 import StationDetailDrawer from './components/StationDetailDrawer'
-import TimelineBar from './components/TimelineBar'
 import { UI_TEXT } from './uiText'
 
 import type { StationFeature } from './types'
@@ -194,8 +193,6 @@ export default function App() {
           />
         </div>
       </section>
-
-      <TimelineBar year={year} onYearChange={handleYearChange} />
 
       <div className="floating-player">
         <button
