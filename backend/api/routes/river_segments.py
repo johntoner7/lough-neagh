@@ -83,7 +83,7 @@ _METRICS_SQL = """
                ON am.station_code = rs.nearest_station_code
               AND am.year = %(year)s
         WHERE (
-            %(catchment)s IS NULL
+            %(catchment)s::text IS NULL
             OR rs.nearest_station_code IN (
                 SELECT station_code
                 FROM stations
@@ -112,7 +112,7 @@ _SQL = """
                ON am.station_code = rs.nearest_station_code
               AND am.year = %(year)s
         WHERE (
-            %(catchment)s IS NULL
+            %(catchment)s::text IS NULL
             OR rs.nearest_station_code IN (
                 SELECT station_code
                 FROM stations
