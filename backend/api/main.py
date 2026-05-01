@@ -41,7 +41,7 @@ def _init_db() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("API starting up")
-    _init_db()
+    await asyncio.to_thread(_init_db)
     await init_pool()
     asyncio.create_task(stations.warm_cache())
     asyncio.create_task(farms.warm_cache())

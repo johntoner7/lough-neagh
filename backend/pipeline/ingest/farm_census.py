@@ -150,7 +150,8 @@ def backfill_farm_census_catchments(database_url: str | None = None) -> int:
                     ) ASC
                 LIMIT 1
             )
-            WHERE fw.geometry IS NOT NULL;
+            WHERE fw.geometry IS NOT NULL
+              AND fw.catchment_name IS NULL;
             """
         ))
         cur = conn.execute(text("SELECT COUNT(*) FROM farm_census_wards WHERE catchment_name IS NOT NULL;"))
