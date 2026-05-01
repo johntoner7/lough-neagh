@@ -73,7 +73,7 @@ _SQL = """
             '[]'::json
         ) AS features
         FROM ward_data
-        WHERE (%(catchment)s IS NULL OR catchment_name = %(catchment)s)
+        WHERE ((%(catchment)s::text) IS NULL OR catchment_name = %(catchment)s)
     )
     SELECT json_build_object(
         'type',     'FeatureCollection',
