@@ -54,7 +54,7 @@ _GEOMETRY_SQL = """
             ) AS geom
         FROM river_segments
         WHERE (
-            %(catchment)s IS NULL
+            %(catchment)s::text IS NULL
             OR nearest_station_code IN (
                 SELECT station_code
                 FROM stations
