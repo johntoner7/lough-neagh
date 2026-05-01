@@ -39,9 +39,9 @@ const stationColor = [
   [
     'step',
     ['get', 'metric_p_sol'],
-    '#1f78b4',
-    0.035, '#ff9f1c',
-    0.1, '#b31b1b',
+    lowRiverPhosphorusColor,
+    0.035, midRiverPhosphorusColor,
+    0.1, highRiverPhosphorusColor,
   ],
 ] as unknown as ExpressionSpecification
 
