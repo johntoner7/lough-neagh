@@ -12,7 +12,7 @@ import { API_BASE } from '../api'
 import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from '../constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
-import type { ExpressionSpecification, MapSourceDataEvent } from 'mapbox-gl'
+import type { ExpressionSpecification } from 'mapbox-gl'
 import { UI_TEXT } from '../uiText'
 
 interface FarmHover {
@@ -45,17 +45,18 @@ const stationColor = [
   ],
 ] as unknown as ExpressionSpecification
 
-// River lines use feature-state; sentinel -1 = no data (null metric)
 const riverLineColor = [
-  'step',
-  ['coalesce', ['feature-state', 'metric_p_sol'], -1],
+  'case',
+  ['==', ['get', 'metric_p_sol'], null],
   '#e5e7eb',
-  0, '#1f78b4',
-  0.035, '#ff9f1c',
-  0.1, '#b31b1b',
+  [
+    'step',
+    ['get', 'metric_p_sol'],
+    '#1f78b4',
+    0.035, '#ff9f1c',
+    0.1, '#b31b1b',
+  ],
 ] as unknown as ExpressionSpecification
-
-const RIVER_METRICS_CACHE_LIMIT = 12
 
 const lakeStatusColor = [
   'match',
@@ -127,16 +128,7 @@ export default function MapContainer({
   const containerRef = useRef<HTMLDivElement>(null)
   const farmCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
   const farmRequestRef = useRef<globalThis.Map<string, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
-  const riverMetricsCacheRef = useRef<globalThis.Map<string, Record<string, number | null>>>(new globalThis.Map())
-
-  const storeRiverMetricsCache = useCallback((key: string, metrics: Record<string, number | null>) => {
-    const cache = riverMetricsCacheRef.current
-    if (!cache.has(key) && cache.size >= RIVER_METRICS_CACHE_LIMIT) {
-      const oldestKey = cache.keys().next().value
-      if (oldestKey !== undefined) cache.delete(oldestKey)
-    }
-    cache.set(key, metrics)
-  }, [])
+  const riverCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
 
   useEffect(() => {
     const el = containerRef.current
@@ -148,7 +140,7 @@ export default function MapContainer({
     return () => observer.disconnect()
   }, [])
   const [lakePolygons, setLakePolygons] = useState<GeoJSON.FeatureCollection | null>(null)
-  const [riverGeometry, setRiverGeometry] = useState<GeoJSON.FeatureCollection | null>(null)
+  const [riverData, setRiverData] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmPolygons, setFarmPolygons] = useState<GeoJSON.FeatureCollection | null>(null)
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
@@ -162,74 +154,24 @@ export default function MapContainer({
       .catch(err => console.error('Failed to fetch lakes:', err))
   }, [])
 
-  // Load river segment geometry once on mount — static, never re-fetched
   useEffect(() => {
-    setRiverGeometry(null)
-    const params = catchment ? `?catchment=${encodeURIComponent(catchment)}` : ''
-    fetch(`${API_BASE}/river-segments/geometry${params}`)
+    const key = `${year}:${catchment || 'all'}`
+    const cached = riverCacheRef.current.get(key)
+    if (cached) { setRiverData(cached); return }
+    let cancelled = false
+    const params = new URLSearchParams({ year: String(year), metric: 'rolling' })
+    if (catchment) params.append('catchment', catchment)
+    fetch(`${API_BASE}/river-segments/geojson?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
-        setRiverGeometry(data as GeoJSON.FeatureCollection)
-      })
-      .catch(err => console.error('Failed to fetch river geometry:', err))
-  }, [catchment])
-
-  // Apply per-year metrics via feature-state — geometry is never re-uploaded
-  useEffect(() => {
-    if (!riverGeometry) return
-    const metric = 'rolling'
-    const key = `${year}:${catchment}:${metric}`
-    let cancelled = false
-    let offSourceData: (() => void) | undefined
-
-    const apply = (metrics: Record<string, number | null>) => {
-      const map = mapRef.current?.getMap()
-      if (!map || cancelled) return
-
-      const doApply = () => {
-        if (cancelled || !map.getSource('river-segs')) return
-        for (const [id, value] of Object.entries(metrics)) {
-          map.setFeatureState(
-            { source: 'river-segs', id: Number(id) },
-            { metric_p_sol: value ?? -1 },
-          )
-        }
-      }
-
-      // Apply immediately — works when the source is already stable (e.g. year changes).
-      doApply()
-
-      // Also listen for source reload: isSourceLoaded can return true before Mapbox's
-      // worker has finished indexing features from a recent setData() call, so the
-      // immediate doApply() above silently drops. The sourcedata event fires after
-      // indexing is complete, guaranteeing setFeatureState lands on real features.
-      const onSourceData = (e: MapSourceDataEvent) => {
-        if (e.sourceId === 'river-segs' && map.isSourceLoaded('river-segs')) {
-          map.off('sourcedata', onSourceData)
-          offSourceData = undefined
-          doApply()
-        }
-      }
-      map.on('sourcedata', onSourceData)
-      offSourceData = () => map.off('sourcedata', onSourceData)
-    }
-
-    const cached = riverMetricsCacheRef.current.get(key)
-    if (cached) { apply(cached); return () => { cancelled = true; offSourceData?.() } }
-
-    const params = new URLSearchParams({ year: String(year), metric })
-    if (catchment) params.append('catchment', catchment)
-    fetch(`${API_BASE}/river-segments/metrics?${params}`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((metrics: Record<string, number | null>) => {
         if (cancelled) return
-        storeRiverMetricsCache(key, metrics)
-        apply(metrics)
+        const fc = data as GeoJSON.FeatureCollection
+        riverCacheRef.current.set(key, fc)
+        setRiverData(fc)
       })
-      .catch(err => { if (!cancelled) console.error(`Failed to fetch river metrics for year ${year}:`, err) })
-
-    return () => { cancelled = true; offSourceData?.() }
-  }, [year, riverGeometry, catchment, storeRiverMetricsCache])
+      .catch(err => console.error(`Failed to fetch river segments for year ${year}:`, err))
+    return () => { cancelled = true }
+  }, [year, catchment])
 
   const farmCacheKey = (farmYear: number) => `${farmYear}:${catchment || 'all'}`
 
@@ -594,12 +536,11 @@ export default function MapContainer({
         </Source>
       )}
 
-      {/* ── River segments: geometry loaded once; per-year colour via feature-state ── */}
+      {/* ── River segments: fetched per year with metric_p_sol in properties ── */}
       <Source
         id="river-segs"
-        key={`river-segs-${catchment || 'all'}`}
         type="geojson"
-        data={riverGeometry ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection}
+        data={riverData ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection}
       >
         <Layer
           id="river-lines"
