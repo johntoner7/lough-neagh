@@ -35,7 +35,7 @@ export const KEY_STATION_CODES = new Set([10233, 10212, 10380, 10361, 10328, 102
 const stationColor = [
   'case',
   ['==', ['get', 'metric_p_sol'], null],
-  '#f3f4f6',
+  '#e5e7eb',
   [
     'step',
     ['get', 'metric_p_sol'],
@@ -49,7 +49,7 @@ const stationColor = [
 const riverLineColor = [
   'step',
   ['coalesce', ['feature-state', 'metric_p_sol'], -1],
-  '#f3f4f6',
+  '#e5e7eb',
   0, '#1f78b4',
   0.035, '#ff9f1c',
   0.1, '#b31b1b',
@@ -444,7 +444,7 @@ export default function MapContainer({
             <span>High (&gt; 0.1 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f3f4f6', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#e5e7eb', flexShrink: 0 }} />
             <span>No reading</span>
           </div>
           {showFarmLayer && (
