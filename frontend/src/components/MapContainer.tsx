@@ -58,14 +58,6 @@ const riverLineColor = [
   ],
 ] as unknown as ExpressionSpecification
 
-const riverLineWidth = [
-  'step',
-  ['get', 'metric_p_sol'],
-  1.0,      // Low (< 0.035): Thin line
-  0.035, 2.0, // Above limit: Medium thickness
-  0.1, 3.5    // High (> 0.1): Bold, thick line
-] as unknown as ExpressionSpecification
-
 const lakeStatusColor = [
   'match',
   ['get', 'ecological_status'],
