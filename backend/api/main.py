@@ -20,28 +20,20 @@ load_dotenv()
 from api.db import close_pool, get_conn, init_pool
 from api.logging_config import configure_logging
 from api.routes import catchments, farms, lakes, river_segments, stations
-from pipeline.ingest.farm_census import backfill_farm_census_catchments
-from scripts.create_tables import main as create_tables
-from scripts.init_db import main as init_db
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 
-def _init_db() -> None:
-    """Ensure PostGIS extensions and schema tables exist on startup."""
-    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-
-    init_db(database_url)
-    create_tables(database_url)
-    backfill_farm_census_catchments(database_url)
-    logger.info("Database schema ensured")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # DB initialisation (PostGIS extensions, table creation, geometry backfills)
+    # is intentionally NOT run here. It is a one-time, long-running operation
+    # that would block startup and cause container timeouts. Run it separately
+    # before deploying via:
+    #   uv run python -m scripts.setup_db
+    # or as a Railway pre-deploy / one-off command.
     logger.info("API starting up")
-    _init_db()
     await init_pool()
     asyncio.create_task(stations.warm_cache())
     asyncio.create_task(farms.warm_cache())
