@@ -196,12 +196,13 @@ export default function MapContainer({
         }
       }
 
-      if (map.isSourceLoaded('river-segs')) {
-        doApply()
-        return
-      }
+      // Apply immediately — works when the source is already stable (e.g. year changes).
+      doApply()
 
-      // Source not yet loaded — defer until Mapbox has processed the GeoJSON
+      // Also listen for source reload: isSourceLoaded can return true before Mapbox's
+      // worker has finished indexing features from a recent setData() call, so the
+      // immediate doApply() above silently drops. The sourcedata event fires after
+      // indexing is complete, guaranteeing setFeatureState lands on real features.
       const onSourceData = (e: MapSourceDataEvent) => {
         if (e.sourceId === 'river-segs' && map.isSourceLoaded('river-segs')) {
           map.off('sourcedata', onSourceData)
