@@ -62,7 +62,7 @@ export const UI_TEXT = {
   },
   header: {                                                                                                                                                                                    
     argumentLine1: 'Lough Neagh supplies 40% of Northern Ireland\'s drinking water. In 2023 it turned green with toxic algae visible from space.',                                             
-    argumentLine2: 'The map shows how cattle density correlates with higher phosphorus concentrations across NI\'s rivers, particularly those feeding into Lough Neagh',                   
+    argumentLine2: 'The map shows how cattle density correlates with higher phosphorus concentrations across NI\'s rivers, particularly those feeding into Lough Neagh.',                   
   },   
 drawer: {
     closeAriaLabel: 'Close station details',
