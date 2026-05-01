@@ -114,7 +114,7 @@ def backfill_farm_census_catchments(database_url: str | None = None) -> int:
     engine = create_engine(url)
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS catchment_name TEXT;"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_farm_census_wards_catchment ON farm_census_wards(catchment_name);"))
+        # conn.execute(text("CREATE INDEX IF NOT EXISTS idx_farm_census_wards_catchment ON farm_census_wards(catchment_name);"))
         conn.execute(text(
             """
             WITH catchment_boundaries AS (
