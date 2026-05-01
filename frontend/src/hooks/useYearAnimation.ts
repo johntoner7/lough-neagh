@@ -14,7 +14,7 @@ export function useYearAnimation(
         if (y >= YEAR_MAX) { setIsPlaying(false); return y }
         return y + 1
       })
-    }, 1500)
+    }, 2000)
     return () => clearInterval(timer)
   }, [isPlaying, setIsPlaying, setYear])
 }
