@@ -12,7 +12,7 @@ import { API_BASE } from '../api'
 import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from '../constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
-import type { ExpressionSpecification } from 'mapbox-gl'
+import type { ExpressionSpecification, MapSourceDataEvent } from 'mapbox-gl'
 import { UI_TEXT } from '../uiText'
 
 interface FarmHover {
@@ -179,30 +179,55 @@ export default function MapContainer({
     if (!riverGeometry) return
     const metric = 'rolling'
     const key = `${year}:${catchment}:${metric}`
+    let cancelled = false
+    let offSourceData: (() => void) | undefined
 
     const apply = (metrics: Record<string, number | null>) => {
       const map = mapRef.current?.getMap()
-      if (!map) return
-      for (const [id, value] of Object.entries(metrics)) {
-        map.setFeatureState(
-          { source: 'river-segs', id: Number(id) },
-          { metric_p_sol: value ?? -1 },
-        )
+      if (!map || cancelled) return
+
+      const doApply = () => {
+        if (cancelled || !map.getSource('river-segs')) return
+        for (const [id, value] of Object.entries(metrics)) {
+          map.setFeatureState(
+            { source: 'river-segs', id: Number(id) },
+            { metric_p_sol: value ?? -1 },
+          )
+        }
       }
+
+      if (map.isSourceLoaded('river-segs')) {
+        doApply()
+        return
+      }
+
+      // Source not yet loaded — defer until Mapbox has processed the GeoJSON
+      const onSourceData = (e: MapSourceDataEvent) => {
+        if (e.sourceId === 'river-segs' && map.isSourceLoaded('river-segs')) {
+          map.off('sourcedata', onSourceData)
+          offSourceData = undefined
+          doApply()
+        }
+      }
+      map.on('sourcedata', onSourceData)
+      offSourceData = () => map.off('sourcedata', onSourceData)
     }
 
     const cached = riverMetricsCacheRef.current.get(key)
-    if (cached) { apply(cached); return }
+    if (cached) { apply(cached); return () => { cancelled = true; offSourceData?.() } }
 
     const params = new URLSearchParams({ year: String(year), metric })
     if (catchment) params.append('catchment', catchment)
     fetch(`${API_BASE}/river-segments/metrics?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((metrics: Record<string, number | null>) => {
+        if (cancelled) return
         storeRiverMetricsCache(key, metrics)
         apply(metrics)
       })
-      .catch(err => console.error(`Failed to fetch river metrics for year ${year}:`, err))
+      .catch(err => { if (!cancelled) console.error(`Failed to fetch river metrics for year ${year}:`, err) })
+
+    return () => { cancelled = true; offSourceData?.() }
   }, [year, riverGeometry, catchment, storeRiverMetricsCache])
 
   const farmCacheKey = (farmYear: number) => `${farmYear}:${catchment || 'all'}`
