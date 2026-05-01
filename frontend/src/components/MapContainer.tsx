@@ -471,6 +471,24 @@ export default function MapContainer({
     >
       <NavigationControl position="top-right" showCompass={false} />
 
+      {/* ── River segments: fetched per year with metric_p_sol in properties ── */}
+      <Source
+        id="river-segs"
+        type="geojson"
+        data={riverData ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection}
+      >
+        <Layer
+          id="river-lines"
+          type="line"
+          beforeId="water"
+          paint={{
+            'line-color': riverLineColor,
+            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 4],
+            'line-opacity': 0.95,
+          }}
+        />
+      </Source>
+
       {/* ── Farm DEA choropleth: cattle density pressure layer ── */}
       {showFarmLayer && farmPolygons && (
         <Source id="farm-deas" type="geojson" data={farmPolygons}>
@@ -535,23 +553,6 @@ export default function MapContainer({
           />
         </Source>
       )}
-
-      {/* ── River segments: fetched per year with metric_p_sol in properties ── */}
-      <Source
-        id="river-segs"
-        type="geojson"
-        data={riverData ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection}
-      >
-        <Layer
-          id="river-lines"
-          type="line"
-          paint={{
-            'line-color': riverLineColor,
-            'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 4],
-            'line-opacity': 0.95,
-          }}
-        />
-      </Source>
 
       {/* ── Layer 1: All stations — 5 px circles coloured by concentration ── */}
       <Source id="stations" type="geojson" data={stationsData as GeoJSON.FeatureCollection}>
