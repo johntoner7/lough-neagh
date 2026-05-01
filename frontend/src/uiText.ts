@@ -17,7 +17,12 @@ export const UI_TEXT = {
       `${above} of ${total} monitored rivers exceed the legal phosphorus limit in ${year}`,
     noDataForYear: 'No data for this year',
     headlineHint: 'Click a circle on the map for detail.',
-    sedimentCallout: 'Even if every river reached compliance today, AFBI scientists estimate it would take around 40 years for Lough Neagh to recover. The phosphorus accumulated over decades is still in the sediment.',
+    dropdowns: 
+      {    
+        sedimentCallout: 'Even if every river reached compliance today, AFBI scientists estimate it would take around 40 years for Lough Neagh to recover. The phosphorus accumulated over decades is still in the sediment.',
+        phosphorusSources: 'Agriculture contributes 62% of the phosphorus entering NI\'s rivers. The main pathways are slurry spreading on saturated land, fertiliser runoff after heavy rainfall, and cattle with direct access to riverbanks. Sewage treatment investment in the 1980s and 90s produced a genuine and measurable improvement, cutting phosphorus loads significantly across the network. Agricultural inputs never followed the same trajectory, and there has been no equivalent policy intervention to address them. The Blackwater catchment, which is among the most intensively farmed in Northern Ireland, had 94% of its monitored stations above the legal phosphorus limit in 2024.',
+        possibleActions: 'Riparian buffer strips are unfertilised grass margins between fields and watercourses, which have been suggested to reduce phosphorus runoff by 30 to 50% when maintained. Tighter slurry management rules would reduce the volume of phosphorus reaching rivers from runoff. Reducing cattle dentisty would also cut phosphorus inputs, as well as delivering a range of other environmental benefits. However, none of these measures would address the legacy phosphorus in Lough Neagh\'s sediment, which is the main driver of algae blooms today.',
+      },
     sections: {
       year: 'Year',
       catchment: 'Catchment',
@@ -58,7 +63,7 @@ export const UI_TEXT = {
   },
   header: {                                                                                                                                                                                    
     argumentLine1: 'Lough Neagh supplies 40% of Northern Ireland\'s drinking water. In 2023 it turned green with toxic algae visible from space.',                                             
-    argumentLine2: 'Agriculture contributes 62% of the phosphorus driving it. These are the rivers carrying it, and most are still failing the legal limit for phosphorus.',                   
+    argumentLine2: 'The map shows how cattle density correlates with higher phosphorus concentrations across NI\'s rivers, particularly those feeding into Lough Neagh',                   
   },   
 drawer: {
     closeAriaLabel: 'Close station details',

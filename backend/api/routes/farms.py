@@ -18,7 +18,7 @@ _CENSUS_MAX_YEAR = 2024
 
 # Farm census data is static for a given year; cache serialised JSON bytes to
 # make repeated requests (e.g. play-button ticks) sub-millisecond.
-_geojson_cache: dict[int, bytes] = {}
+_geojson_cache: dict[tuple[int, str | None], bytes] = {}
 
 # Simplification tolerance in degrees (~110 m). Ward boundaries for a
 # choropleth map need far less precision than cadastral data.
@@ -37,7 +37,15 @@ _SQL = """
             pigs,
             cattle_per_ha,
             lu_per_ha,
-            COALESCE(geom_simplified, ST_SimplifyPreserveTopology(geometry, %(tol)s)) AS geom
+                        COALESCE(geom_simplified, ST_SimplifyPreserveTopology(geometry, %(tol)s)) AS geom,
+                        (
+                                SELECT s.catchment_name
+                                FROM stations s
+                                WHERE s.catchment_name IS NOT NULL
+                                    AND s.geom_4326 IS NOT NULL
+                                ORDER BY geometry <-> s.geom_4326
+                                LIMIT 1
+                        ) AS catchment_name
         FROM farm_census_wards
         WHERE year = %(year)s
           AND (geom_simplified IS NOT NULL OR geometry IS NOT NULL)
@@ -65,6 +73,7 @@ _SQL = """
             '[]'::json
         ) AS features
         FROM ward_data
+        WHERE (%(catchment)s IS NULL OR catchment_name = %(catchment)s)
     )
     SELECT json_build_object(
         'type',     'FeatureCollection',
@@ -79,11 +88,11 @@ def _clamp_year(year: int) -> int:
     return max(_CENSUS_MIN_YEAR, min(_CENSUS_MAX_YEAR, year))
 
 
-async def _fetch_farms_json(year: int) -> bytes:
+async def _fetch_farms_json(year: int, catchment: str | None = None) -> bytes:
     async with get_conn() as conn:
         cur = await conn.execute(
             _SQL,
-            {"year": year, "tol": _SIMPLIFY_TOLERANCE, "dp": _GEOJSON_DECIMAL_PLACES},
+            {"year": year, "catchment": catchment, "tol": _SIMPLIFY_TOLERANCE, "dp": _GEOJSON_DECIMAL_PLACES},
         )
         row = await cur.fetchone()
     return (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
@@ -92,10 +101,11 @@ async def _fetch_farms_json(year: int) -> bytes:
 async def warm_cache() -> None:
     """Pre-fill _geojson_cache for all census years in the background."""
     for year in range(_CENSUS_MIN_YEAR, _CENSUS_MAX_YEAR + 1):
-        if year in _geojson_cache:
+        key = (year, None)
+        if key in _geojson_cache:
             continue
         try:
-            _geojson_cache[year] = await _fetch_farms_json(year)
+            _geojson_cache[key] = await _fetch_farms_json(year)
             logger.info("Farm cache warmed for year %d", year)
         except Exception:
             logger.exception("Farm cache warmup failed for year %d", year)
@@ -105,6 +115,7 @@ async def warm_cache() -> None:
 async def get_farms_geojson(
     response: Response,
     year: int = Query(2024, description="Year for farm census data (2015–2024)"),
+    catchment: str | None = Query(None),
 ) -> Response:
     """
     Farm census ward polygons as a GeoJSON FeatureCollection.
@@ -120,11 +131,12 @@ async def get_farms_geojson(
     """
     census_year = _clamp_year(year)
     response.headers["Cache-Control"] = "public, max-age=86400"
+    cache_key = (census_year, catchment)
 
-    if census_year not in _geojson_cache:
-        _geojson_cache[census_year] = await _fetch_farms_json(census_year)
+    if cache_key not in _geojson_cache:
+        _geojson_cache[cache_key] = await _fetch_farms_json(census_year, catchment)
 
-    return Response(content=_geojson_cache[census_year], media_type="application/json")
+    return Response(content=_geojson_cache[cache_key], media_type="application/json")
 
 
 @router.get("/years")

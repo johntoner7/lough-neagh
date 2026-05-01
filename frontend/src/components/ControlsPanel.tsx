@@ -1,6 +1,7 @@
 import { YEAR_MAX, YEAR_MIN } from '../constants'
 import { getEraCaption } from '../eraCaptions'
 import { UI_TEXT } from '../uiText'
+import { useState } from 'react'
 
 import type { SummaryStats } from '../types'
 
@@ -28,6 +29,7 @@ export default function ControlsPanel({
   const isBaselineYear = year === YEAR_MIN
 
   const narration = getEraCaption(year)
+  const [openPanel, setOpenPanel] = useState<string | null>('summary')
 
   return (
     <aside className="controls-panel">
@@ -74,8 +76,13 @@ export default function ControlsPanel({
 
       </div>
 
-      <details className="cp-section cp-collapsible" open>
-        <summary className="cp-collapsible-summary">River status summary</summary>
+      <details className="cp-section cp-collapsible" open={openPanel === 'summary'}>
+        <summary
+          className="cp-collapsible-summary"
+          onClick={e => { e.preventDefault(); setOpenPanel(openPanel === 'summary' ? null : 'summary') }}
+        >
+          River status summary
+        </summary>
         <div className="cp-collapsible-body cp-headline">
           {isBaselineYear ? (
             <>
@@ -108,10 +115,39 @@ export default function ControlsPanel({
         </div>
       </details>
 
-      <details className="cp-section cp-collapsible" open>
-        <summary className="cp-collapsible-summary">Why recovery is slow</summary>
-        <div className="cp-collapsible-body">
-          <div className="cp-sediment-callout">{UI_TEXT.sidebar.sedimentCallout}</div>
+      <details className="cp-section cp-collapsible" open={openPanel === 'phosphorus'}>
+        <summary
+          className="cp-collapsible-summary"
+          onClick={e => { e.preventDefault(); setOpenPanel(openPanel === 'phosphorus' ? null : 'phosphorus') }}
+        >
+          Where the phosphorus comes from
+        </summary>
+        <div className="cp-collapsible-body" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          <div className="cp-sediment-callout">{UI_TEXT.sidebar.dropdowns.phosphorusSources}</div>
+        </div>
+      </details>
+
+      <details className="cp-section cp-collapsible" open={openPanel === 'sediment'}>
+        <summary
+          className="cp-collapsible-summary"
+          onClick={e => { e.preventDefault(); setOpenPanel(openPanel === 'sediment' ? null : 'sediment') }}
+        >
+          Why recovery is slow
+        </summary>
+        <div className="cp-collapsible-body" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          <div className="cp-sediment-callout overflow-scroll">{UI_TEXT.sidebar.dropdowns.sedimentCallout}</div>
+        </div>
+      </details>
+
+      <details className="cp-section cp-collapsible" open={openPanel === 'actions'}>
+        <summary
+          className="cp-collapsible-summary"
+          onClick={e => { e.preventDefault(); setOpenPanel(openPanel === 'actions' ? null : 'actions') }}
+        >
+          What could be done
+        </summary>
+        <div className="cp-collapsible-body" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          <div className="cp-sediment-callout">{UI_TEXT.sidebar.dropdowns.possibleActions}</div>
         </div>
       </details>
 

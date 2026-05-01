@@ -55,6 +55,8 @@ const riverLineColor = [
   0.1, '#b31b1b',
 ] as unknown as ExpressionSpecification
 
+const RIVER_METRICS_CACHE_LIMIT = 12
+
 const lakeStatusColor = [
   'match',
   ['get', 'ecological_status'],
@@ -71,6 +73,7 @@ interface Props {
   token: string
   year: number
   isPlaying: boolean
+  catchment: string
   stationsData: GeoJSONCollection
   keyStationsData: GeoJSONCollection
   selectedFeature: StationFeature | null
@@ -113,6 +116,7 @@ export default function MapContainer({
   token,
   year,
   isPlaying,
+  catchment,
   stationsData,
   keyStationsData,
   selectedFeature,
@@ -121,9 +125,18 @@ export default function MapContainer({
 }: Props) {
   const mapRef = useRef<MapRef>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const farmCacheRef = useRef<globalThis.Map<number, GeoJSON.FeatureCollection>>(new globalThis.Map())
-  const farmRequestRef = useRef<globalThis.Map<number, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
+  const farmCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
+  const farmRequestRef = useRef<globalThis.Map<string, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
   const riverMetricsCacheRef = useRef<globalThis.Map<string, Record<string, number | null>>>(new globalThis.Map())
+
+  const storeRiverMetricsCache = useCallback((key: string, metrics: Record<string, number | null>) => {
+    const cache = riverMetricsCacheRef.current
+    if (!cache.has(key) && cache.size >= RIVER_METRICS_CACHE_LIMIT) {
+      const oldestKey = cache.keys().next().value
+      if (oldestKey !== undefined) cache.delete(oldestKey)
+    }
+    cache.set(key, metrics)
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -152,20 +165,21 @@ export default function MapContainer({
   // Load river segment geometry once on mount — static, never re-fetched
   useEffect(() => {
     const t0 = performance.now()
-    fetch(`${API_BASE}/river-segments/geometry`)
+    const params = catchment ? `?catchment=${encodeURIComponent(catchment)}` : ''
+    fetch(`${API_BASE}/river-segments/geometry${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
         console.log(`[segments] geometry loaded in ${(performance.now() - t0).toFixed(0)}ms`)
         setRiverGeometry(data as GeoJSON.FeatureCollection)
       })
       .catch(err => console.error('Failed to fetch river geometry:', err))
-  }, [])
+  }, [catchment])
 
   // Apply per-year metrics via feature-state — geometry is never re-uploaded
   useEffect(() => {
     if (!riverGeometry) return
     const metric = 'rolling'
-    const key = `${year}:${metric}`
+    const key = `${year}:${catchment}:${metric}`
     const t0 = performance.now()
 
     const apply = (metrics: Record<string, number | null>) => {
@@ -188,48 +202,57 @@ export default function MapContainer({
     if (cached) { apply(cached); return }
 
     console.log(`[segments yr=${year}] fetching metrics…`)
-    fetch(`${API_BASE}/river-segments/metrics?year=${year}&metric=${metric}`)
+    const params = new URLSearchParams({ year: String(year), metric })
+    if (catchment) params.append('catchment', catchment)
+    fetch(`${API_BASE}/river-segments/metrics?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((metrics: Record<string, number | null>) => {
         console.log(`[segments yr=${year}] metrics received in ${(performance.now() - t0).toFixed(0)}ms`)
-        riverMetricsCacheRef.current.set(key, metrics)
+        storeRiverMetricsCache(key, metrics)
         apply(metrics)
       })
       .catch(err => console.error(`Failed to fetch river metrics for year ${year}:`, err))
-  }, [year, riverGeometry])
+  }, [year, riverGeometry, catchment, storeRiverMetricsCache])
+
+  const farmCacheKey = (farmYear: number) => `${farmYear}:${catchment || 'all'}`
 
   const fetchFarmPolygons = useCallback((farmYear: number, signal?: AbortSignal) => {
-    const cached = farmCacheRef.current.get(farmYear)
+    const key = farmCacheKey(farmYear)
+    const cached = farmCacheRef.current.get(key)
     if (cached) return Promise.resolve(cached)
 
-    const inflight = farmRequestRef.current.get(farmYear)
+    const inflight = farmRequestRef.current.get(key)
     if (inflight) return inflight
 
-    const request = fetch(`${API_BASE}/farms/geojson?year=${farmYear}`, signal ? { signal } : undefined)
+    const params = new URLSearchParams({ year: String(farmYear) })
+    if (catchment) params.append('catchment', catchment)
+    const request = fetch(`${API_BASE}/farms/geojson?${params}`, signal ? { signal } : undefined)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
         const polygons = data as GeoJSON.FeatureCollection
-        farmCacheRef.current.set(farmYear, polygons)
+        farmCacheRef.current.set(key, polygons)
         return polygons
       })
       .finally(() => {
-        farmRequestRef.current.delete(farmYear)
+        farmRequestRef.current.delete(key)
       })
 
-    farmRequestRef.current.set(farmYear, request)
+    farmRequestRef.current.set(key, request)
     return request
-  }, [])
+  }, [catchment])
 
   const prefetchFarmYear = useCallback((farmYear: number) => {
     if (farmYear < FARM_YEAR_MIN || farmYear > FARM_YEAR_MAX) return
-    if (farmCacheRef.current.has(farmYear) || farmRequestRef.current.has(farmYear)) return
+    const key = farmCacheKey(farmYear)
+    if (farmCacheRef.current.has(key) || farmRequestRef.current.has(key)) return
 
     void fetchFarmPolygons(farmYear).catch(err => {
       console.warn(`Farm prefetch failed for year ${farmYear}:`, err)
     })
-  }, [fetchFarmPolygons])
+  }, [fetchFarmPolygons, catchment])
 
   useEffect(() => {
+    console.log(`MapContainer effect: year=${year} catchment=${catchment} showFarmLayer=${showFarmLayer}`)
     if (!showFarmLayer) {
       setFarmLayerLoading(false)
       setFarmLayerError(false)
@@ -237,7 +260,7 @@ export default function MapContainer({
     }
 
     const farmYear = Math.max(FARM_YEAR_MIN, Math.min(FARM_YEAR_MAX, year))
-    const cached = farmCacheRef.current.get(farmYear)
+    const cached = farmCacheRef.current.get(farmCacheKey(farmYear))
     if (cached) {
       setFarmPolygons(cached)
       setFarmLayerLoading(false)
@@ -247,9 +270,11 @@ export default function MapContainer({
     }
 
     const controller = new AbortController()
+    console.log(`No cached farm data for year ${farmYear}, fetching…`)
     setFarmLayerLoading(true)
     setFarmLayerError(false)
 
+    console.log(`Fetching farm polygons for year ${farmYear}…`)
     fetchFarmPolygons(farmYear, controller.signal)
       .then(data => {
         if (controller.signal.aborted) return
@@ -267,9 +292,7 @@ export default function MapContainer({
         if (controller.signal.aborted) return
         setFarmLayerLoading(false)
       })
-
-    return () => controller.abort()
-  }, [year, showFarmLayer, isPlaying, fetchFarmPolygons, prefetchFarmYear])
+  }, [year, catchment, showFarmLayer, isPlaying, fetchFarmPolygons, prefetchFarmYear])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
     if (!onStationClick) return

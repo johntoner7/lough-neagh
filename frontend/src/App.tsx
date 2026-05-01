@@ -15,12 +15,25 @@ import { UI_TEXT } from './uiText'
 
 import type { StationFeature } from './types'
 
+function getInitialYear(): number {
+  if (typeof window === 'undefined') return YEAR_MAX
+  const params = new URLSearchParams(window.location.search)
+  const value = Number(params.get('year'))
+  if (!Number.isFinite(value)) return YEAR_MAX
+  return value >= YEAR_MIN && value <= YEAR_MAX ? value : YEAR_MAX
+}
+
+function getInitialCatchment(): string {
+  if (typeof window === 'undefined') return ''
+  return new URLSearchParams(window.location.search).get('catchment') ?? ''
+}
+
 export default function App() {
   const { token, catchments, timeSeriesByCode, setTimeSeriesByCode, error } = useAppInit()
 
-  const [year, setYear] = useState(YEAR_MAX)
-  const [catchment, setCatchment] = useState('')
-  const [showFarmLayer, setShowFarmLayer] = useState(false)
+  const [year, setYear] = useState(getInitialYear)
+  const [catchment, setCatchment] = useState(getInitialCatchment)
+  const [showFarmLayer, setShowFarmLayer] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<StationFeature | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -44,6 +57,19 @@ export default function App() {
   const handleCatchmentChange = useCallback((value: string) => {
     setCatchment(value)
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (year === YEAR_MAX) params.delete('year')
+    else params.set('year', String(year))
+
+    if (catchment) params.set('catchment', catchment)
+    else params.delete('catchment')
+
+    const nextSearch = params.toString()
+    const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
+    window.history.replaceState({}, '', nextUrl)
+  }, [year, catchment])
 
   const handleTogglePlay = useCallback(() => {
     setIsPlaying(p => {
@@ -114,7 +140,6 @@ export default function App() {
         <header className="app-header app-header--mini">
           <div className="app-header-title">{UI_TEXT.sidebar.title}</div>
           <div className="app-header-subtitle">{UI_TEXT.sidebar.subtitle}</div>
-          <div className="app-header-divider" aria-hidden="true" />
           <div className="app-header-argument">
             <span>{UI_TEXT.header.argumentLine1}</span>
             <span>{UI_TEXT.header.argumentLine2}</span>
@@ -128,6 +153,7 @@ export default function App() {
                 token={token}
                 year={year}
                 isPlaying={isPlaying}
+                catchment={catchment}
                 stationsData={stationsData}
                 keyStationsData={keyStationsData}
                 selectedFeature={selectedFeature}

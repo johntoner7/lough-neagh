@@ -26,7 +26,7 @@ _YEAR_MIN = 1990
 _YEAR_MAX = 2024
 
 _geojson_cache: dict[tuple, bytes] = {}
-_geometry_cache: bytes | None = None
+_geometry_cache: dict[str | None, bytes] = {}
 _metrics_cache: dict[tuple, bytes] = {}
 
 _GEOMETRY_SQL = """
@@ -53,6 +53,14 @@ _GEOMETRY_SQL = """
                 ST_SimplifyPreserveTopology(COALESCE(geom_4326, ST_Transform(geom, 4326)), %(tol)s)
             ) AS geom
         FROM river_segments
+        WHERE (
+            %(catchment)s IS NULL
+            OR nearest_station_code IN (
+                SELECT station_code
+                FROM stations
+                WHERE catchment_name = %(catchment)s
+            )
+        )
     ) sub
 """
 
@@ -74,6 +82,14 @@ _METRICS_SQL = """
         LEFT JOIN annual_metrics am
                ON am.station_code = rs.nearest_station_code
               AND am.year = %(year)s
+        WHERE (
+            %(catchment)s IS NULL
+            OR rs.nearest_station_code IN (
+                SELECT station_code
+                FROM stations
+                WHERE catchment_name = %(catchment)s
+            )
+        )
     ) sub
 """
 
@@ -95,6 +111,14 @@ _SQL = """
         LEFT JOIN annual_metrics am
                ON am.station_code = rs.nearest_station_code
               AND am.year = %(year)s
+        WHERE (
+            %(catchment)s IS NULL
+            OR rs.nearest_station_code IN (
+                SELECT station_code
+                FROM stations
+                WHERE catchment_name = %(catchment)s
+            )
+        )
     )
     SELECT json_build_object(
         'type', 'FeatureCollection',
@@ -114,8 +138,8 @@ _SQL = """
 """
 
 
-async def _fetch_segments_json(year: int, metric: str) -> bytes:
-    db_key = f"river_segments_{metric}_{year}"
+async def _fetch_segments_json(year: int, metric: str, catchment: str | None = None) -> bytes:
+    db_key = f"river_segments_{metric}_{year}_{catchment or 'all'}"
 
     # L2: shared DB cache — survives across workers and restarts.
     async with get_conn() as conn:
@@ -133,6 +157,7 @@ async def _fetch_segments_json(year: int, metric: str) -> bytes:
             {
                 "year": year,
                 "metric": metric,
+                "catchment": catchment,
                 "max_dist": _MAX_STATION_DIST_M,
                 "tol": _SIMPLIFY_TOLERANCE,
                 "dp": _GEOJSON_DECIMAL_PLACES,
@@ -153,25 +178,25 @@ async def _fetch_segments_json(year: int, metric: str) -> bytes:
     return result
 
 
-async def _fetch_geometry() -> bytes:
-    global _geometry_cache
-    if _geometry_cache is not None:
-        return _geometry_cache
+async def _fetch_geometry(catchment: str | None = None) -> bytes:
+    if catchment in _geometry_cache:
+        return _geometry_cache[catchment]
 
-    db_key = "river_segments_geometry"
+    db_key = f"river_segments_geometry_{catchment or 'all'}"
     async with get_conn() as conn:
         cur = await conn.execute(
             "SELECT data FROM geojson_cache WHERE cache_key = %s", [db_key]
         )
         row = await cur.fetchone()
         if row:
-            _geometry_cache = bytes(row[0])
-            return _geometry_cache
+            result = bytes(row[0])
+            _geometry_cache[catchment] = result
+            return result
 
     async with get_conn() as conn:
         cur = await conn.execute(
             _GEOMETRY_SQL,
-            {"dp": _GEOJSON_DECIMAL_PLACES, "tol": _SIMPLIFY_TOLERANCE},
+            {"dp": _GEOJSON_DECIMAL_PLACES, "tol": _SIMPLIFY_TOLERANCE, "catchment": catchment},
         )
         row = await cur.fetchone()
     result = (row[0] if row and row[0] else '{"type":"FeatureCollection","features":[]}').encode()
@@ -185,19 +210,19 @@ async def _fetch_geometry() -> bytes:
     except Exception:
         logger.warning("Failed to write geometry cache")
 
-    _geometry_cache = result
+    _geometry_cache[catchment] = result
     return result
 
 
-async def _fetch_metrics(year: int, metric: str) -> bytes:
-    key = (year, metric)
+async def _fetch_metrics(year: int, metric: str, catchment: str | None = None) -> bytes:
+    key = (year, metric, catchment)
     if key in _metrics_cache:
         return _metrics_cache[key]
 
     async with get_conn() as conn:
         cur = await conn.execute(
             _METRICS_SQL,
-            {"year": year, "metric": metric, "max_dist": _MAX_STATION_DIST_M},
+            {"year": year, "metric": metric, "catchment": catchment, "max_dist": _MAX_STATION_DIST_M},
         )
         row = await cur.fetchone()
     result = (row[0] if row and row[0] else "{}").encode()
@@ -214,7 +239,7 @@ async def warm_cache() -> None:
         logger.exception("Segment geometry cache warmup failed")
 
     for year in range(_YEAR_MIN, _YEAR_MAX + 1):
-        key = (year, "rolling")
+        key = (year, "rolling", None)
         if key in _metrics_cache:
             continue
         try:
@@ -225,7 +250,7 @@ async def warm_cache() -> None:
 
     # Also keep the combined geojson cache warm for the benchmark/legacy endpoint
     for year in range(_YEAR_MIN, _YEAR_MAX + 1):
-        key = (year, "rolling")
+        key = (year, "rolling", None)
         if key in _geojson_cache:
             continue
         try:
@@ -235,10 +260,12 @@ async def warm_cache() -> None:
 
 
 @router.get("/geometry", response_class=Response)
-async def get_river_segments_geometry() -> Response:
+async def get_river_segments_geometry(
+    catchment: str | None = Query(None),
+) -> Response:
     """Return river segment geometry as GeoJSON (static, year-independent).
     Features carry numeric `id` for use with Mapbox feature-state."""
-    content = await _fetch_geometry()
+    content = await _fetch_geometry(catchment)
     return Response(
         content=content,
         media_type="application/json",
@@ -250,9 +277,10 @@ async def get_river_segments_geometry() -> Response:
 async def get_river_segments_metrics(
     year: int = Query(..., description="Year"),
     metric: str = Query("rolling", pattern="^(annual|rolling)$"),
+    catchment: str | None = Query(None),
 ) -> Response:
     """Return {segmentId: metric_p_sol | null} for all segments for the given year."""
-    content = await _fetch_metrics(year, metric)
+    content = await _fetch_metrics(year, metric, catchment)
     return Response(
         content=content,
         media_type="application/json",
@@ -264,12 +292,13 @@ async def get_river_segments_metrics(
 async def get_river_segments_geojson(
     year: int = Query(..., description="Year to colour segments by"),
     metric: str = Query("rolling", pattern="^(annual|rolling)$"),
+    catchment: str | None = Query(None),
 ) -> Response:
     """Return all river segments as GeoJSON, coloured by the nearest station's
     annual phosphorus metric for the given year."""
-    cache_key = (year, metric)
+    cache_key = (year, metric, catchment)
     if cache_key not in _geojson_cache:
-        _geojson_cache[cache_key] = await _fetch_segments_json(year, metric)
+        _geojson_cache[cache_key] = await _fetch_segments_json(year, metric, catchment)
     return Response(
         content=_geojson_cache[cache_key],
         media_type="application/json",
