@@ -35,13 +35,13 @@ export const KEY_STATION_CODES = new Set([10233, 10212, 10380, 10361, 10328, 102
 const stationColor = [
   'case',
   ['==', ['get', 'metric_p_sol'], null],
-  '#cccccc',
+  '#9ca3af',
   [
     'step',
     ['get', 'metric_p_sol'],
-    '#4393c3',
-    0.035, '#f4a736',
-    0.1, '#d6604d',
+    '#1f78b4',
+    0.035, '#ff9f1c',
+    0.1, '#b31b1b',
   ],
 ] as unknown as ExpressionSpecification
 
@@ -49,10 +49,10 @@ const stationColor = [
 const riverLineColor = [
   'step',
   ['coalesce', ['feature-state', 'metric_p_sol'], -1],
-  '#cccccc',
-  0, '#4393c3',
-  0.035, '#f4a736',
-  0.1, '#d6604d',
+  '#9ca3af',
+  0, '#1f78b4',
+  0.035, '#ff9f1c',
+  0.1, '#b31b1b',
 ] as unknown as ExpressionSpecification
 
 const lakeStatusColor = [
@@ -432,19 +432,19 @@ export default function MapContainer({
         <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
           <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (lines)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4393c3', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f78b4', flexShrink: 0 }} />
             <span>Low (&lt; 0.035 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f4a736', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff9f1c', flexShrink: 0 }} />
             <span>Above limit (0.035–0.1)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#d6604d', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#b31b1b', flexShrink: 0 }} />
             <span>High (&gt; 0.1 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#cccccc', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#9ca3af', flexShrink: 0 }} />
             <span>No reading</span>
           </div>
           {showFarmLayer && (
@@ -499,7 +499,7 @@ export default function MapContainer({
             type="fill"
             paint={{
               'fill-color': cattleColor,
-              'fill-opacity': 0.45,
+              'fill-opacity': 0.35,
             }}
           />
           <Layer
