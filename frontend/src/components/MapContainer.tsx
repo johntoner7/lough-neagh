@@ -9,7 +9,7 @@ import Map, {
 import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { API_BASE } from '../api'
-import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR } from '../constants'
+import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR, lowRiverPhosphorusColor, highRiverPhosphorusColor, midRiverPhosphorusColor, highCattleDensityColor, lowCattleDensityColor, midCattleDensityColor, veryHighCattleDensityColor } from '../constants'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
 import type { ExpressionSpecification } from 'mapbox-gl'
@@ -48,14 +48,22 @@ const stationColor = [
 const riverLineColor = [
   'case',
   ['==', ['get', 'metric_p_sol'], null],
-  '#e5e7eb',
+  '#e5e7eb', 
   [
     'step',
     ['get', 'metric_p_sol'],
-    '#1f78b4',
-    0.035, '#ff9f1c',
-    0.1, '#b31b1b',
+    lowRiverPhosphorusColor, // < 0.035: Sky Blue (Clean/Good)
+    0.035, midRiverPhosphorusColor, // Above limit: Solid Orange
+    0.1, highRiverPhosphorusColor, // > 0.1: Deep Crimson Red (Serious/High)
   ],
+] as unknown as ExpressionSpecification
+
+const riverLineWidth = [
+  'step',
+  ['get', 'metric_p_sol'],
+  1.0,      // Low (< 0.035): Thin line
+  0.035, 2.0, // Above limit: Medium thickness
+  0.1, 3.5    // High (> 0.1): Bold, thick line
 ] as unknown as ExpressionSpecification
 
 const lakeStatusColor = [
@@ -87,10 +95,10 @@ interface Props {
 const cattleColor = [
   'step',
   ['coalesce', ['get', 'cattle_per_ha'], 0],
-  '#fdf8e1',
-  0.5, '#7bc67e',
-  1.5, '#f4821f',
-  2.5, '#c0392b',
+  lowCattleDensityColor, // 0 - 0.5: Near-white (Low)
+  0.5, midCattleDensityColor, // 0.5 - 1.5: Minty Green (Medium - light and airy)
+  1.5, highCattleDensityColor, // 1.5 - 2.5: Deep Green (High - big jump in darkness)
+  2.5, veryHighCattleDensityColor, // > 2.5: Black-Green (Very High - extremely dense)
 ] as unknown as ExpressionSpecification
 
 const stationRadius = [
@@ -372,7 +380,7 @@ export default function MapContainer({
       style={{
         position: 'absolute',
         right: 8,
-        bottom: 8,
+        bottom: 36,
         zIndex: 10,
         background: 'rgba(255,255,255,0.94)',
         border: '1px solid rgba(17,24,39,0.12)',
@@ -412,15 +420,15 @@ export default function MapContainer({
         <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
           <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (lines)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#1f78b4', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: lowRiverPhosphorusColor, flexShrink: 0 }} />
             <span>Low (&lt; 0.035 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff9f1c', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: midRiverPhosphorusColor, flexShrink: 0 }} />
             <span>Above limit (0.035–0.1)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#b31b1b', flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: highRiverPhosphorusColor, flexShrink: 0 }} />
             <span>High (&gt; 0.1 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
@@ -432,19 +440,19 @@ export default function MapContainer({
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#fdf8e1', border: '1px solid #7bc67e', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: lowCattleDensityColor, border: '1px solid #7bc67e', flexShrink: 0 }} />
                 <span>Low (&lt; 0.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#7bc67e', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: midCattleDensityColor, flexShrink: 0 }} />
                 <span>Medium (0.5–1.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f4821f', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: highCattleDensityColor, flexShrink: 0 }} />
                 <span>High (1.5–2.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#c0392b', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: veryHighCattleDensityColor, flexShrink: 0 }} />
                 <span>Very high (&gt; 2.5 / ha)</span>
               </div>
             </>
@@ -458,6 +466,7 @@ export default function MapContainer({
       mapStyle="mapbox://styles/mapbox/light-v11"
       initialViewState={{ longitude: -6.7, latitude: 54.63, zoom: 7.8 }}
       style={{ width: '100%', height: '100%' }}
+      preserveDrawingBuffer
       interactiveLayerIds={(() => {
         const layers: string[] = []
         if (onStationClick) layers.push('stations-circle', 'key-stations-circle')
@@ -497,7 +506,7 @@ export default function MapContainer({
             type="fill"
             paint={{
               'fill-color': cattleColor,
-              'fill-opacity': 0.35,
+              'fill-opacity': 0.25,
             }}
           />
           <Layer

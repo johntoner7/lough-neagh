@@ -58,7 +58,6 @@ export const UI_TEXT = {
       line2: 'Agriculture contributes 62% of the phosphorus entering Lough Neagh. No equivalent intervention exists for diffuse agricultural runoff.',
       line3:
         'The phosphorus that accumulated in Lough Neagh\'s sediment during this period continues to fuel algae blooms today, regardless of what the rivers are currently carrying.',
-      source: 'Source: DAERA, 2026. Six key stations = main Lough Neagh tributaries.',
     },
   },
   header: {                                                                                                                                                                                    
