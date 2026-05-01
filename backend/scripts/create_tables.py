@@ -122,6 +122,7 @@ UPDATE farm_census_wards
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom ON farm_census_wards USING GIST(geometry);
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom_simplified ON farm_census_wards USING GIST(geom_simplified);
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year);
+ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS catchment_name TEXT;
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_catchment ON farm_census_wards(catchment_name);
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
