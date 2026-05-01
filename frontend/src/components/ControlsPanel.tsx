@@ -1,7 +1,8 @@
+import { useState } from 'react'
+
 import { YEAR_MAX, YEAR_MIN } from '../constants'
 import { getEraCaption } from '../eraCaptions'
 import { UI_TEXT } from '../uiText'
-import { useState } from 'react'
 
 import type { SummaryStats } from '../types'
 

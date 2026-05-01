@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 
-import SparklineChart from './SparklineChart'
 import { KEY_STATION_CODES_ORDERED } from '../constants'
+
+import SparklineChart from './SparklineChart'
 
 import type { StationTimeSeries } from '../types'
 
@@ -15,8 +16,8 @@ export default function SparklinePanel({ allSeries, currentYear }: Props) {
     const allValues: number[] = []
     for (const ts of allSeries.values()) {
       for (const point of ts.series) {
-        if (typeof point.annual_mean_p_sol === 'number') allValues.push(point.annual_mean_p_sol)
-        if (typeof point.rolling_mean_5yr === 'number') allValues.push(point.rolling_mean_5yr)
+        if (typeof point.annual_mean_p_sol === 'number') {allValues.push(point.annual_mean_p_sol)}
+        if (typeof point.rolling_mean_5yr === 'number') {allValues.push(point.rolling_mean_5yr)}
       }
     }
     const observedMax = allValues.length ? Math.max(...allValues) : 0.2

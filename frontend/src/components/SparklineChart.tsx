@@ -7,7 +7,6 @@ import {
   Tooltip,
   Filler,
 } from 'chart.js'
-import type { ChartOptions, TooltipItem } from 'chart.js'
 import annotationPlugin from 'chartjs-plugin-annotation'
 import { useMemo } from 'react'
 import { Line } from 'react-chartjs-2'
@@ -16,6 +15,7 @@ import { WFD_THRESHOLD } from '../constants'
 import { UI_TEXT } from '../uiText'
 
 import type { TimeSeriesPoint } from '../types'
+import type { ChartOptions, TooltipItem } from 'chart.js'
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler, annotationPlugin,

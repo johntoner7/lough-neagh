@@ -8,7 +8,7 @@ export function useYearAnimation(
   setYear: React.Dispatch<React.SetStateAction<number>>,
 ): void {
   useEffect(() => {
-    if (!isPlaying) return
+    if (!isPlaying) {return}
     const timer = setInterval(() => {
       setYear(y => {
         if (y >= YEAR_MAX) { setIsPlaying(false); return y }

@@ -7,7 +7,7 @@ interface Props {
 export default function CinematicCaption({ year }: Props) {
   const caption = getEraCaption(year)
   const eraKey = getEraKey(year)
-  if (!caption) return null
+  if (!caption) {return null}
   return (
     <div className="cinematic-caption">
       <span key={eraKey}>{caption}</span>
