@@ -30,6 +30,7 @@ _SQL = """
         SELECT
             ward_name,
             ward_code,
+            catchment_name,
             num_farms,
             area_ha,
             cattle,
@@ -37,15 +38,7 @@ _SQL = """
             pigs,
             cattle_per_ha,
             lu_per_ha,
-                        COALESCE(geom_simplified, ST_SimplifyPreserveTopology(geometry, %(tol)s)) AS geom,
-                        (
-                                SELECT s.catchment_name
-                                FROM stations s
-                                WHERE s.catchment_name IS NOT NULL
-                                    AND s.geom_4326 IS NOT NULL
-                                ORDER BY geometry <-> s.geom_4326
-                                LIMIT 1
-                        ) AS catchment_name
+            COALESCE(geom_simplified, ST_SimplifyPreserveTopology(geometry, %(tol)s)) AS geom
         FROM farm_census_wards
         WHERE year = %(year)s
           AND (geom_simplified IS NOT NULL OR geometry IS NOT NULL)
@@ -59,6 +52,7 @@ _SQL = """
                     'properties', json_build_object(
                         'ward_name',    ward_name,
                         'ward_code',    ward_code,
+                        'catchment_name', catchment_name,
                         'num_farms',    num_farms,
                         'area_ha',      area_ha,
                         'cattle',       cattle,
@@ -73,7 +67,7 @@ _SQL = """
             '[]'::json
         ) AS features
         FROM ward_data
-        WHERE ((%(catchment)s::text) IS NULL OR catchment_name = %(catchment)s)
+        WHERE (%(catchment)s IS NULL OR catchment_name = %(catchment)s)
     )
     SELECT json_build_object(
         'type',     'FeatureCollection',

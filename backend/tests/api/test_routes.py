@@ -268,6 +268,17 @@ class TestFarmsGeoJSON:
             assert "cattle_per_ha" in props
             assert "lu_per_ha" in props
 
+    def test_catchment_filter(self, client: TestClient) -> None:
+        r = client.get("/farms/geojson", params={"year": RECENT_YEAR, "catchment": KNOWN_CATCHMENT})
+        assert r.status_code == 200
+        features = r.json()["features"]
+        assert len(features) > 0
+
+    def test_catchment_filter_returns_fewer_than_full(self, client: TestClient) -> None:
+        full = client.get("/farms/geojson", params={"year": RECENT_YEAR}).json()["features"]
+        filtered = client.get("/farms/geojson", params={"year": RECENT_YEAR, "catchment": KNOWN_CATCHMENT}).json()["features"]
+        assert len(filtered) < len(full)
+
     def test_year_clamping(self, client: TestClient) -> None:
         # Year before range should clamp to 2015
         r = client.get("/farms/geojson", params={"year": 1990})

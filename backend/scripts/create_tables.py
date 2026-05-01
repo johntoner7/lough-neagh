@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS farm_census_wards (
     id              SERIAL PRIMARY KEY,
     ward_name       TEXT NOT NULL,
     ward_code       TEXT NOT NULL,
+    catchment_name  TEXT,
     year            INTEGER NOT NULL,
     num_farms       INTEGER,
     area_ha         FLOAT,
@@ -121,6 +122,7 @@ UPDATE farm_census_wards
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom ON farm_census_wards USING GIST(geometry);
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_geom_simplified ON farm_census_wards USING GIST(geom_simplified);
 CREATE INDEX IF NOT EXISTS idx_farm_census_wards_year ON farm_census_wards(year);
+CREATE INDEX IF NOT EXISTS idx_farm_census_wards_catchment ON farm_census_wards(catchment_name);
 CREATE INDEX IF NOT EXISTS idx_readings_station_date ON readings(station_code, reading_date);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_station_year ON annual_metrics(station_code, year);
 CREATE INDEX IF NOT EXISTS idx_annual_metrics_year_station ON annual_metrics(year, station_code);

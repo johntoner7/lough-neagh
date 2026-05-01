@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 _DATA_ROOT = Path(__file__).parents[3] / "data" / "raw" / "farms"
 
@@ -101,3 +102,57 @@ def insert_farm_census(engine) -> int:
         conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY;"))
     gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False, chunksize=500)
     return len(gdf)
+
+
+def backfill_farm_census_catchments(database_url: str | None = None) -> int:
+    """Stamp each ward-year row with the catchment whose station geometry it overlaps most.
+
+    The catchment polygons are derived from station locations, so this works even when
+    there is no standalone catchment boundary table in the database.
+    """
+    url = database_url or os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    engine = create_engine(url)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS catchment_name TEXT;"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_farm_census_wards_catchment ON farm_census_wards(catchment_name);"))
+        conn.execute(text(
+            """
+            WITH catchment_boundaries AS (
+                SELECT
+                    s.catchment_name,
+                    ST_ConvexHull(
+                        ST_Collect(COALESCE(s.geom_4326, ST_Transform(s.geom, 4326)))
+                    ) AS geom
+                FROM stations s
+                WHERE s.catchment_name IS NOT NULL
+                  AND (s.geom_4326 IS NOT NULL OR s.geom IS NOT NULL)
+                GROUP BY s.catchment_name
+            )
+            UPDATE farm_census_wards fw
+            SET catchment_name = (
+                SELECT cb.catchment_name
+                FROM catchment_boundaries cb
+                WHERE fw.geometry IS NOT NULL
+                  AND cb.geom IS NOT NULL
+                ORDER BY
+                    COALESCE(
+                        ST_Area(
+                            ST_Intersection(
+                                ST_Transform(fw.geometry, 29902),
+                                ST_Transform(cb.geom, 29902)
+                            )
+                        ),
+                        0
+                    ) DESC,
+                    ST_Distance(
+                        ST_PointOnSurface(ST_Transform(fw.geometry, 29902)),
+                        ST_PointOnSurface(ST_Transform(cb.geom, 29902))
+                    ) ASC
+                LIMIT 1
+            )
+            WHERE fw.geometry IS NOT NULL;
+            """
+        ))
+        cur = conn.execute(text("SELECT COUNT(*) FROM farm_census_wards WHERE catchment_name IS NOT NULL;"))
+        count = cur.scalar() or 0
+    return int(count)

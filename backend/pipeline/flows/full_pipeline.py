@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 import geopandas as gpd
 import pandas as pd
 
-from backend.pipeline.ingest.farm_census import insert_farm_census
+from backend.pipeline.ingest.farm_census import backfill_farm_census_catchments, insert_farm_census
 from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_river_segments, insert_stations, insert_waterbodies
 from backend.pipeline.ingest.lakes import load_lakes
@@ -93,7 +93,8 @@ def ingest_river_segments(enriched: gpd.GeoDataFrame, database_url: str) -> dict
 def ingest_farms(database_url: str) -> dict[str, int]:
     engine = create_engine(database_url)
     n = insert_farm_census(engine)
-    return {"farm_ward_years": n}
+    catchments = backfill_farm_census_catchments(database_url)
+    return {"farm_ward_years": n, "farm_ward_catchments": catchments}
 
 
 def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:

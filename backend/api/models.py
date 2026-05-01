@@ -94,6 +94,7 @@ class LakeCollection(BaseModel):
 class FarmProperties(BaseModel):
     ward_name: str
     ward_code: str
+    catchment_name: str | None = None
     num_farms: int | None
     area_ha: float | None
     cattle: int | None

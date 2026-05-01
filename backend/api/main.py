@@ -20,6 +20,7 @@ load_dotenv()
 from api.db import close_pool, get_conn, init_pool
 from api.logging_config import configure_logging
 from api.routes import catchments, farms, lakes, river_segments, stations
+from pipeline.ingest.farm_census import backfill_farm_census_catchments
 from scripts.create_tables import main as create_tables
 from scripts.init_db import main as init_db
 
@@ -33,6 +34,7 @@ def _init_db() -> None:
 
     init_db(database_url)
     create_tables(database_url)
+    backfill_farm_census_catchments(database_url)
     logger.info("Database schema ensured")
 
 

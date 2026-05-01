@@ -164,12 +164,11 @@ export default function MapContainer({
 
   // Load river segment geometry once on mount — static, never re-fetched
   useEffect(() => {
-    const t0 = performance.now()
+    setRiverGeometry(null)
     const params = catchment ? `?catchment=${encodeURIComponent(catchment)}` : ''
     fetch(`${API_BASE}/river-segments/geometry${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
-        console.log(`[segments] geometry loaded in ${(performance.now() - t0).toFixed(0)}ms`)
         setRiverGeometry(data as GeoJSON.FeatureCollection)
       })
       .catch(err => console.error('Failed to fetch river geometry:', err))
@@ -180,34 +179,26 @@ export default function MapContainer({
     if (!riverGeometry) return
     const metric = 'rolling'
     const key = `${year}:${catchment}:${metric}`
-    const t0 = performance.now()
 
     const apply = (metrics: Record<string, number | null>) => {
       const map = mapRef.current?.getMap()
       if (!map) return
-      const t1 = performance.now()
       for (const [id, value] of Object.entries(metrics)) {
         map.setFeatureState(
           { source: 'river-segs', id: Number(id) },
           { metric_p_sol: value ?? -1 },
         )
       }
-      console.log(`[segments yr=${year}] feature-state applied: ${(performance.now() - t1).toFixed(0)}ms (${Object.keys(metrics).length} segs)`)
-      requestAnimationFrame(() =>
-        console.log(`[segments yr=${year}] total to frame: ${(performance.now() - t0).toFixed(0)}ms`)
-      )
     }
 
     const cached = riverMetricsCacheRef.current.get(key)
     if (cached) { apply(cached); return }
 
-    console.log(`[segments yr=${year}] fetching metrics…`)
     const params = new URLSearchParams({ year: String(year), metric })
     if (catchment) params.append('catchment', catchment)
     fetch(`${API_BASE}/river-segments/metrics?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then((metrics: Record<string, number | null>) => {
-        console.log(`[segments yr=${year}] metrics received in ${(performance.now() - t0).toFixed(0)}ms`)
         storeRiverMetricsCache(key, metrics)
         apply(metrics)
       })
@@ -252,7 +243,6 @@ export default function MapContainer({
   }, [fetchFarmPolygons, catchment])
 
   useEffect(() => {
-    console.log(`MapContainer effect: year=${year} catchment=${catchment} showFarmLayer=${showFarmLayer}`)
     if (!showFarmLayer) {
       setFarmLayerLoading(false)
       setFarmLayerError(false)
@@ -270,11 +260,9 @@ export default function MapContainer({
     }
 
     const controller = new AbortController()
-    console.log(`No cached farm data for year ${farmYear}, fetching…`)
     setFarmLayerLoading(true)
     setFarmLayerError(false)
 
-    console.log(`Fetching farm polygons for year ${farmYear}…`)
     fetchFarmPolygons(farmYear, controller.signal)
       .then(data => {
         if (controller.signal.aborted) return
@@ -292,6 +280,7 @@ export default function MapContainer({
         if (controller.signal.aborted) return
         setFarmLayerLoading(false)
       })
+      return () => controller.abort()
   }, [year, catchment, showFarmLayer, isPlaying, fetchFarmPolygons, prefetchFarmYear])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
@@ -582,6 +571,7 @@ export default function MapContainer({
       {/* ── River segments: geometry loaded once; per-year colour via feature-state ── */}
       <Source
         id="river-segs"
+        key={`river-segs-${catchment || 'all'}`}
         type="geojson"
         data={riverGeometry ?? { type: 'FeatureCollection', features: [] } as GeoJSON.FeatureCollection}
       >
