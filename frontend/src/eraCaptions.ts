@@ -4,32 +4,32 @@ export const ERA_CAPTIONS: EraCaption[] = [
   {
     from: 1990,
     to: 1999,
-    text: 'Sewage treatment upgrades removed 80 tonnes of phosphorus a year. Every monitored station was still failing.',
+    text: 'Sewage treatment upgrades removed 80 tonnes of phosphorus a year, causing levels of phosphorus to fall across monitored stations.',
   },
   {
     from: 2000,
     to: 2011,
-    text: 'The Water Framework Directive sets legal targets. The Moyola briefly achieves compliance — the only tributary ever to do so.',
+    text: 'The Water Framework Directive sets legal targets for achieving all surface waters to achieve good ecologoical status by 2027.',
   },
   {
     from: 2012,
     to: 2014,
-    text: 'Going for Growth launches. NI expands meat and dairy production to feed 10 million people.',
+    text: 'Going for Growth programme is launched to prioritise expanding the agri-food sector.',
   },
   {
     from: 2015,
     to: 2019,
-    text: 'EU milk quotas abolished. The Moyola begins reversing. River phosphorus rises.',
+    text: 'EU milk quotas abolished, allowing dairy farmers to expand production and increase the size of the cattle herd.',
   },
   {
     from: 2020,
     to: 2022,
-    text: 'Between 2012 and 2022, phosphorus in NI rivers rose 55%. WFD gains reversed.',
+    text: 'Between 2012 and 2022, phosphorus in NI rivers rose 55%.',
   },
   {
     from: 2023,
     to: 2024,
-    text: 'Algae blooms visible from space. The sediment will take 20 years to recover.',
+    text: 'Algae blooms in Lough Neagh are visible from space.',
   },
 ]
 
