@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { useDragToDismiss } from '../hooks/useDragToDismiss'
-import StationDetail from './StationDetail'
 import { UI_TEXT } from '../uiText'
+
+import StationDetail from './StationDetail'
 
 import type { StationFeature, StationTimeSeries } from '../types'
 
@@ -27,7 +28,7 @@ export default function StationDetailDrawer({
   const [showScrollHint, setShowScrollHint] = useState(false)
 
   const drawerStyle = useMemo(() => {
-    if (!open || dragOffset <= 0) return undefined
+    if (!open || dragOffset <= 0) {return undefined}
     return { transform: `translateY(${dragOffset}px)` }
   }, [dragOffset, open])
 
@@ -47,11 +48,11 @@ export default function StationDetailDrawer({
     return () => { cancelAnimationFrame(rafId); window.removeEventListener('resize', updateHint) }
   }, [open, feature, timeSeries])
 
-  if (!feature) return null
+  if (!feature) {return null}
 
   const onContentScroll = () => {
     const content = contentRef.current
-    if (!content) return
+    if (!content) {return}
     const hasOverflow = content.scrollHeight - content.clientHeight > 16
     const nearTop = content.scrollTop < 20
     setShowScrollHint(hasOverflow && nearTop)

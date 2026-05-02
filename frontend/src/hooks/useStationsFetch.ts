@@ -21,7 +21,7 @@ export function useStationsFetch(
   const [keyStationsData, setKeyStationsData] = useState<GeoJSONCollection>(EMPTY_COLLECTION)
 
   useEffect(() => {
-    if (!token) return
+    if (!token) {return}
     const ctrl = new AbortController()
 
     fetchStations(year, catchment, true, 'rolling', ctrl.signal)
@@ -33,7 +33,7 @@ export function useStationsFetch(
         setKeyStationsData({ type: 'FeatureCollection', features: keyFeatures })
       })
       .catch(e => {
-        if (e instanceof DOMException && e.name === 'AbortError') return
+        if (e instanceof DOMException && e.name === 'AbortError') {return}
         console.warn('Station fetch error:', e)
       })
 

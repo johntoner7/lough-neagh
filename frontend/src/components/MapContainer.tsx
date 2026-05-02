@@ -10,10 +10,10 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 
 import { API_BASE } from '../api'
 import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR, lowRiverPhosphorusColor, highRiverPhosphorusColor, midRiverPhosphorusColor, highCattleDensityColor, lowCattleDensityColor, midCattleDensityColor, veryHighCattleDensityColor } from '../constants'
+import { UI_TEXT } from '../uiText'
 
 import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
 import type { ExpressionSpecification } from 'mapbox-gl'
-import { UI_TEXT } from '../uiText'
 
 interface FarmHover {
   dea_name: string
@@ -132,7 +132,7 @@ export default function MapContainer({
 
   useEffect(() => {
     const el = containerRef.current
-    if (!el) return
+    if (!el) {return}
     const observer = new ResizeObserver(() => {
       mapRef.current?.getMap().resize()
     })
@@ -160,11 +160,11 @@ export default function MapContainer({
     if (cached) { setRiverData(cached); return }
     let cancelled = false
     const params = new URLSearchParams({ year: String(year), metric: 'rolling' })
-    if (catchment) params.append('catchment', catchment)
+    if (catchment) {params.append('catchment', catchment)}
     fetch(`${API_BASE}/river-segments/geojson?${params}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
-        if (cancelled) return
+        if (cancelled) {return}
         const fc = data as GeoJSON.FeatureCollection
         riverCacheRef.current.set(key, fc)
         setRiverData(fc)
@@ -178,13 +178,13 @@ export default function MapContainer({
   const fetchFarmPolygons = useCallback((farmYear: number, signal?: AbortSignal) => {
     const key = farmCacheKey(farmYear)
     const cached = farmCacheRef.current.get(key)
-    if (cached) return Promise.resolve(cached)
+    if (cached) {return Promise.resolve(cached)}
 
     const inflight = farmRequestRef.current.get(key)
-    if (inflight) return inflight
+    if (inflight) {return inflight}
 
     const params = new URLSearchParams({ year: String(farmYear) })
-    if (catchment) params.append('catchment', catchment)
+    if (catchment) {params.append('catchment', catchment)}
     const request = fetch(`${API_BASE}/farms/geojson?${params}`, signal ? { signal } : undefined)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => {
@@ -201,9 +201,9 @@ export default function MapContainer({
   }, [catchment])
 
   const prefetchFarmYear = useCallback((farmYear: number) => {
-    if (farmYear < FARM_YEAR_MIN || farmYear > FARM_YEAR_MAX) return
+    if (farmYear < FARM_YEAR_MIN || farmYear > FARM_YEAR_MAX) {return}
     const key = farmCacheKey(farmYear)
-    if (farmCacheRef.current.has(key) || farmRequestRef.current.has(key)) return
+    if (farmCacheRef.current.has(key) || farmRequestRef.current.has(key)) {return}
 
     void fetchFarmPolygons(farmYear).catch(err => {
       console.warn(`Farm prefetch failed for year ${farmYear}:`, err)
@@ -223,7 +223,7 @@ export default function MapContainer({
       setFarmPolygons(cached)
       setFarmLayerLoading(false)
       setFarmLayerError(false)
-      if (isPlaying) prefetchFarmYear(farmYear + 1)
+      if (isPlaying) {prefetchFarmYear(farmYear + 1)}
       return
     }
 
@@ -233,35 +233,35 @@ export default function MapContainer({
 
     fetchFarmPolygons(farmYear, controller.signal)
       .then(data => {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) {return}
         setFarmPolygons(data)
         setFarmLayerError(false)
-        if (isPlaying) prefetchFarmYear(farmYear + 1)
+        if (isPlaying) {prefetchFarmYear(farmYear + 1)}
       })
       .catch(err => {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) {return}
         console.error('Failed to fetch farms:', err)
         setFarmPolygons(null)
         setFarmLayerError(true)
       })
       .finally(() => {
-        if (controller.signal.aborted) return
+        if (controller.signal.aborted) {return}
         setFarmLayerLoading(false)
       })
       return () => controller.abort()
   }, [year, catchment, showFarmLayer, isPlaying, fetchFarmPolygons, prefetchFarmYear])
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
-    if (!onStationClick) return
+    if (!onStationClick) {return}
     const feature = e.features?.[0]
-    if (!feature) return
+    if (!feature) {return}
     // mapbox-gl coerces boolean/null properties when returning rendered features,
     // so we extract only the station_code and look up the clean object from stationsData
     const code = feature.properties?.station_code
-    if (typeof code !== 'number') return
+    if (typeof code !== 'number') {return}
     const match = stationsData.features.find(f => f.properties.station_code === code)
       ?? keyStationsData.features.find(f => f.properties.station_code === code)
-    if (!match) return
+    if (!match) {return}
     onStationClick(match, { x: e.point.x, y: e.point.y })
   }, [onStationClick, stationsData, keyStationsData])
 
@@ -483,7 +483,7 @@ export default function MapContainer({
       preserveDrawingBuffer
       interactiveLayerIds={(() => {
         const layers: string[] = []
-        if (onStationClick) layers.push('stations-circle', 'key-stations-circle')
+        if (onStationClick) {layers.push('stations-circle', 'key-stations-circle')}
         layers.push('river-lines')
         return layers
       })()}

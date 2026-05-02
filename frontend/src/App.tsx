@@ -1,29 +1,30 @@
+import { Analytics } from '@vercel/analytics/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { fetchTimeSeries } from './api'
-import { YEAR_MIN, YEAR_MAX } from './constants'
+import CinematicCaption from './components/CinematicCaption'
 import ControlsPanel from './components/ControlsPanel'
+import MapContainer from './components/MapContainer'
+import StationDetailDrawer from './components/StationDetailDrawer'
+import { YEAR_MIN, YEAR_MAX } from './constants'
 import { useAppInit } from './hooks/useAppInit'
 import { useStationsFetch } from './hooks/useStationsFetch'
 import { useSummaryStats } from './hooks/useSummaryStats'
 import { useYearAnimation } from './hooks/useYearAnimation'
-import CinematicCaption from './components/CinematicCaption'
-import MapContainer from './components/MapContainer'
-import StationDetailDrawer from './components/StationDetailDrawer'
 import { UI_TEXT } from './uiText'
 
 import type { StationFeature } from './types'
 
 function getInitialYear(): number {
-  if (typeof window === 'undefined') return YEAR_MAX
+  if (typeof window === 'undefined') {return YEAR_MAX}
   const params = new URLSearchParams(window.location.search)
   const value = Number(params.get('year'))
-  if (!Number.isFinite(value)) return YEAR_MAX
+  if (!Number.isFinite(value)) {return YEAR_MAX}
   return value >= YEAR_MIN && value <= YEAR_MAX ? value : YEAR_MAX
 }
 
 function getInitialCatchment(): string {
-  if (typeof window === 'undefined') return ''
+  if (typeof window === 'undefined') {return ''}
   return new URLSearchParams(window.location.search).get('catchment') ?? ''
 }
 
@@ -59,11 +60,11 @@ export default function App() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (year === YEAR_MAX) params.delete('year')
-    else params.set('year', String(year))
+    if (year === YEAR_MAX) {params.delete('year')}
+    else {params.set('year', String(year))}
 
-    if (catchment) params.set('catchment', catchment)
-    else params.delete('catchment')
+    if (catchment) {params.set('catchment', catchment)}
+    else {params.delete('catchment')}
 
     const nextSearch = params.toString()
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
@@ -73,7 +74,7 @@ export default function App() {
   const handleTogglePlay = useCallback(() => {
     setIsPlaying(p => {
       if (!p) {
-        if (year === YEAR_MAX) setYear(YEAR_MIN)
+        if (year === YEAR_MAX) {setYear(YEAR_MIN)}
         setDrawerOpen(false)
         setSelectedFeature(null)
       }
@@ -226,6 +227,7 @@ export default function App() {
           ›
         </button>
       </div>
+      <Analytics />
     </div>
   )
 }

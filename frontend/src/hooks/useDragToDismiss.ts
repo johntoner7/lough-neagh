@@ -40,7 +40,7 @@ export function useDragToDismiss(open: boolean, onClose: () => void): DragToDism
   }
 
   const onHandleTouchMove = (e: TouchEvent<HTMLDivElement>) => {
-    if (startY.current === null) return
+    if (startY.current === null) {return}
     const delta = e.touches[0].clientY - startY.current
     commitOffset(delta > 0 ? delta : 0)
   }
@@ -49,7 +49,7 @@ export function useDragToDismiss(open: boolean, onClose: () => void): DragToDism
     const offset = dragOffsetRef.current
     commitOffset(0)
     startY.current = null
-    if (offset > 80) onClose()
+    if (offset > 80) {onClose()}
   }
 
   // Content-area swipe: only start drag if already scrolled to top
@@ -63,7 +63,7 @@ export function useDragToDismiss(open: boolean, onClose: () => void): DragToDism
   }
 
   const onContentTouchMove = (e: TouchEvent<HTMLDivElement>) => {
-    if (startY.current === null) return
+    if (startY.current === null) {return}
     const delta = e.touches[0].clientY - startY.current
     if (delta <= 0) {
       // Scrolling up into content — cancel drag

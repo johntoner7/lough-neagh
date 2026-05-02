@@ -1,6 +1,7 @@
 import { WFD_THRESHOLD } from '../constants'
-import SparklineChart from './SparklineChart'
 import { UI_TEXT } from '../uiText'
+
+import SparklineChart from './SparklineChart'
 
 import type { StationFeature, StationTimeSeries } from '../types'
 
