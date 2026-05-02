@@ -449,6 +449,28 @@ export default function MapContainer({
               </div>
             </>
           )}
+          {year === LAKE_STATUS_YEAR && (
+            <>
+              <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', margin: '8px 0' }} />
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Lake ecological status (2024)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e', flexShrink: 0 }} />
+                <span>Good</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#eab308', flexShrink: 0 }} />
+                <span>Moderate</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f97316', flexShrink: 0 }} />
+                <span>Poor</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#b91c1c', flexShrink: 0 }} />
+                <span>Bad</span>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
