@@ -432,19 +432,19 @@ export default function MapContainer({
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: lowCattleDensityColor, border: '1px solid #7bc67e', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: lowCattleDensityColor, border: '1px solid #7bc67e', opacity: 0.25, flexShrink: 0 }} />
                 <span>Low (&lt; 0.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: midCattleDensityColor, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: midCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
                 <span>Medium (0.5–1.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: highCattleDensityColor, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: highCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
                 <span>High (1.5–2.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: veryHighCattleDensityColor, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: veryHighCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
                 <span>Very high (&gt; 2.5 / ha)</span>
               </div>
             </>
