@@ -412,19 +412,19 @@ export default function MapContainer({
         <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
           <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (lines)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: lowRiverPhosphorusColor, flexShrink: 0 }} />
+            <span style={{ width: 18, height: 3, borderRadius: 1, background: lowRiverPhosphorusColor, flexShrink: 0 }} />
             <span>Low (&lt; 0.035 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: midRiverPhosphorusColor, flexShrink: 0 }} />
+            <span style={{ width: 18, height: 3, borderRadius: 1, background: midRiverPhosphorusColor, flexShrink: 0 }} />
             <span>Above limit (0.035–0.1)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: highRiverPhosphorusColor, flexShrink: 0 }} />
+            <span style={{ width: 18, height: 3, borderRadius: 1, background: highRiverPhosphorusColor, flexShrink: 0 }} />
             <span>High (&gt; 0.1 mg/l)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: showFarmLayer ? 8 : 0 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#e5e7eb', flexShrink: 0 }} />
+            <span style={{ width: 18, height: 3, borderRadius: 1, background: '#e5e7eb', flexShrink: 0 }} />
             <span>No reading</span>
           </div>
           {showFarmLayer && (
@@ -432,19 +432,19 @@ export default function MapContainer({
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', marginBottom: 8 }} />
               <div style={{ fontWeight: 700, marginBottom: 6 }}>Cattle density (areas)</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: lowCattleDensityColor, border: '1px solid #7bc67e', opacity: 0.25, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: lowCattleDensityColor, border: '1px solid #7bc67e', opacity: 0.5, flexShrink: 0 }} />
                 <span>Low (&lt; 0.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: midCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: midCattleDensityColor, opacity: 0.5, flexShrink: 0 }} />
                 <span>Medium (0.5–1.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: highCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: highCattleDensityColor, opacity: 0.5, flexShrink: 0 }} />
                 <span>High (1.5–2.5 / ha)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: veryHighCattleDensityColor, opacity: 0.25, flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: veryHighCattleDensityColor, opacity: 0.5, flexShrink: 0 }} />
                 <span>Very high (&gt; 2.5 / ha)</span>
               </div>
             </>
@@ -452,21 +452,21 @@ export default function MapContainer({
           {year === LAKE_STATUS_YEAR && (
             <>
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', margin: '8px 0' }} />
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Lake ecological status (2024)</div>
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Lake ecological status</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#22c55e', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(34,197,94,0.45)', border: '2px solid #22c55e', flexShrink: 0, boxSizing: 'border-box' }} />
                 <span>Good</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#eab308', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(234,179,8,0.45)', border: '2px solid #eab308', flexShrink: 0, boxSizing: 'border-box' }} />
                 <span>Moderate</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#f97316', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(249,115,22,0.45)', border: '2px solid #f97316', flexShrink: 0, boxSizing: 'border-box' }} />
                 <span>Poor</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#b91c1c', flexShrink: 0 }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(185,28,28,0.45)', border: '2px solid #b91c1c', flexShrink: 0, boxSizing: 'border-box' }} />
                 <span>Bad</span>
               </div>
             </>
@@ -507,7 +507,7 @@ export default function MapContainer({
           paint={{
             'line-color': riverLineColor,
             'line-width': ['interpolate', ['linear'], ['zoom'], 7, 1.2, 12, 4],
-            'line-opacity': 0.95,
+            'line-opacity': ['case', ['==', ['get', 'metric_p_sol'], null], 0.25, 0.95] as unknown as number,
           }}
         />
       </Source>
@@ -518,17 +518,19 @@ export default function MapContainer({
           <Layer
             id="farm-fill"
             type="fill"
+            beforeId="river-lines"
             paint={{
               'fill-color': cattleColor,
-              'fill-opacity': 0.25,
+              'fill-opacity': 0.5,
             }}
           />
           <Layer
             id="farm-line"
             type="line"
+            beforeId="river-lines"
             paint={{
-              'line-color': '#c0392b',
-              'line-opacity': 0.22,
+              'line-color': '#1f2937',
+              'line-opacity': 0.3,
               'line-width': 0.8,
             }}
           />
@@ -543,7 +545,7 @@ export default function MapContainer({
             type="fill"
             paint={{
               'fill-color': lakeStatusColor,
-              'fill-opacity': 0.24,
+              'fill-opacity': 0.45,
             }}
           />
           <Layer
