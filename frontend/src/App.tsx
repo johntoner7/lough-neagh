@@ -144,6 +144,9 @@ export default function App() {
             <span>{UI_TEXT.header.argumentLine1}</span>
             <span>{UI_TEXT.header.argumentLine2}</span>
           </div>
+          <a href="https://www.climategapni.com" className="app-header-backlink">
+            Climate Gap NI →
+          </a>
         </header>
 
         <div className="map-and-controls">
@@ -194,6 +197,11 @@ export default function App() {
           />
         </div>
       </section>
+
+      <footer className="site-footer">
+        <a href="https://www.climategapni.com">Climate Gap NI</a>
+        {' — '}explore more Northern Ireland climate and environment data
+      </footer>
 
       <div className="floating-player">
         <button

@@ -1142,6 +1142,34 @@ input[type="range"]::-moz-range-thumb {
 }
 
 
+/* ─── Site nav back-link ─────────────────────────────────────────────────── */
+.app-header-backlink {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+.app-header-backlink:hover { color: var(--text); }
+
+/* ─── Site footer ────────────────────────────────────────────────────────── */
+.site-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.site-footer a:hover { color: var(--text); }
+
 /* ─── Methodology footer ────────────────────────────────────────────────── */
 .methodology {
   padding: 14px 20px;
