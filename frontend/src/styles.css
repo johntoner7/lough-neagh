@@ -1299,7 +1299,7 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .map-container {
-    height: 55dvh;
+    height: 65dvh;
     flex: none;
   }
 

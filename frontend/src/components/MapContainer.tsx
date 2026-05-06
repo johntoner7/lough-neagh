@@ -145,7 +145,7 @@ export default function MapContainer({
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
   const [farmLayerLoading, setFarmLayerLoading] = useState(false)
-  const [legendOpen, setLegendOpen] = useState(true)
+  const [legendOpen, setLegendOpen] = useState(() => window.innerWidth > 760)
 
   useEffect(() => {
     fetch(`${API_BASE}/lakes/geojson`)
