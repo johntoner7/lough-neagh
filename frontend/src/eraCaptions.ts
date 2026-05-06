@@ -9,7 +9,7 @@ export const ERA_CAPTIONS: EraCaption[] = [
   {
     from: 2000,
     to: 2011,
-    text: 'The Water Framework Directive sets legal targets for achieving all surface waters to achieve good ecologoical status by 2027.',
+    text: 'The Water Framework Directive sets legal targets for all surface waters to achieve good ecologoical status by 2027.',
   },
   {
     from: 2012,
