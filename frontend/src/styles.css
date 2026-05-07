@@ -426,6 +426,48 @@ html, body, #root {
   max-width: 40ch;
 }
 
+.cp-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.cp-data-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 8px 6px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.cp-data-table td {
+  padding: 5px 8px 5px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+.cp-data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.cp-data-table td:first-child {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.cp-data-table td:last-child {
+  font-size: 10px;
+  color: var(--text-dim);
+  padding-right: 0;
+}
+
 .cp-year-row {
   display: flex;
   align-items: center;
@@ -1531,4 +1573,188 @@ input[type="range"]::-moz-range-thumb {
 
 .mapboxgl-ctrl button .mapboxgl-ctrl-icon {
   filter: invert(0.3);
+}
+
+/* ── Methodology sidebar link ── */
+.cp-methodology-link {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
+.cp-methodology-link a {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.cp-methodology-link a:hover {
+  color: var(--accent);
+}
+
+/* ── Methodology page ── */
+.methodology-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 40px 20px 80px;
+}
+
+.methodology-content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.methodology-back {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+  margin-bottom: 28px;
+}
+
+.methodology-back:hover {
+  color: var(--accent);
+}
+
+.methodology-title {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: 36px;
+}
+
+.methodology-section {
+  margin-bottom: 44px;
+}
+
+.methodology-section h2 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.methodology-section p {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.65;
+  margin-bottom: 12px;
+  max-width: 65ch;
+}
+
+.methodology-table-wrap {
+  overflow-x: auto;
+}
+
+.methodology-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.methodology-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 16px 8px 0;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.methodology-table td {
+  padding: 10px 16px 10px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  vertical-align: top;
+  color: var(--text-muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.methodology-table td:first-child {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.methodology-table td:last-child {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.methodology-table tr:last-child td {
+  border-bottom: none;
+}
+
+.methodology-dl {
+  display: grid;
+  gap: 0;
+}
+
+.methodology-dl dt {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+
+.methodology-dl dd {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 65ch;
+  margin-left: 0;
+}
+
+.methodology-cannot {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.methodology-cannot-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.methodology-cannot-item:last-child {
+  border-bottom: none;
+}
+
+.methodology-cannot-item h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 5px;
+}
+
+.methodology-cannot-item p {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+  max-width: 65ch;
+  margin: 0;
+}
+
+.methodology-footer {
+  margin-top: 48px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.methodology-footer a {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-decoration: none;
+}
+
+.methodology-footer a:hover {
+  color: var(--accent);
 }

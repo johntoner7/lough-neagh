@@ -152,6 +152,10 @@ export default function ControlsPanel({
         </div>
       </details>
 
+      <div className="cp-methodology-link">
+        <a href="/methodology">Data sources &amp; methodology →</a>
+      </div>
+
     </aside>
   )
 }
