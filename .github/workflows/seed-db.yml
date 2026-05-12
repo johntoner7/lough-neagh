@@ -1,0 +1,27 @@
+name: Seed Production Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Base URL of the Railway service
+        required: true
+        type: string
+      api_password:
+        description: Auth token/password for the seed endpoint
+        required: true
+        type: string
+
+jobs:
+  seed-production-database:
+    name: Seed Production Database
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seed database
+        env:
+          API_URL: ${{ inputs.api_url }}
+          API_PASSWORD: ${{ inputs.api_password }}
+        run: |
+          response=$(curl -sS -X POST "${API_URL%/}/your-seed-endpoint" \
+            -H "Authorization: Bearer ${API_PASSWORD}")
+          echo "$response"
