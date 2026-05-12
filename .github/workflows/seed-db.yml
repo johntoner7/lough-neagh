@@ -1,0 +1,45 @@
+name: Seed Production Database
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run only (validate files and DB, no writes)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  seed-production-database:
+    name: Seed Production Database
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --no-dev
+
+      - name: Run pipeline (dry-run)
+        if: ${{ inputs.dry_run }}
+        working-directory: backend
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+        run: uv run python -m backend.scripts.run_pipeline --dry-run
+
+      - name: Seed production database
+        if: ${{ !inputs.dry_run }}
+        working-directory: backend
+        env:
+          DATABASE_PUBLIC_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
+        run: uv run python -m backend.scripts.run_pipeline --production --yes
