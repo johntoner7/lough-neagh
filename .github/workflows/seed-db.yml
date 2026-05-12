@@ -35,7 +35,7 @@ jobs:
             *) base_url="https://$base_url" ;;
           esac
 
-          endpoint="/${SEED_ENDPOINT#/}"
+          endpoint="/$(printf '%s' "$SEED_ENDPOINT" | sed 's#^/*##')"
           request_url="${base_url}${endpoint}"
 
           response_file="$(mktemp)"
