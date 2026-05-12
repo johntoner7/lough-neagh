@@ -11,6 +11,11 @@ on:
         description: Auth token/password for the seed endpoint
         required: true
         type: string
+      seed_endpoint:
+        description: Seed API path (for example /seed)
+        required: true
+        default: /seed
+        type: string
 
 jobs:
   seed-production-database:
@@ -22,10 +27,28 @@ jobs:
         env:
           API_URL: ${{ inputs.api_url }}
           API_PASSWORD: ${{ inputs.api_password }}
+          SEED_ENDPOINT: ${{ inputs.seed_endpoint }}
         run: |
+          base_url="${API_URL%/}"
+          case "$base_url" in
+            http://*|https://*) ;;
+            *) base_url="https://$base_url" ;;
+          esac
+
+          endpoint="/${SEED_ENDPOINT#/}"
+          request_url="${base_url}${endpoint}"
+
           response_file="$(mktemp)"
-          status_code="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST "${API_URL%/}/your-seed-endpoint" \
-            -H "Authorization: Bearer ${API_PASSWORD}")"
+          if ! status_code="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST "$request_url" \
+            -H "Authorization: Bearer ${API_PASSWORD}")"; then
+            curl_exit_code=$?
+            cat "$response_file"
+            rm -f "$response_file"
+            echo "Seed request failed before receiving an HTTP response (curl exit code: $curl_exit_code)." >&2
+            echo "Check that api_url points to your public API service URL and seed_endpoint is correct." >&2
+            exit "$curl_exit_code"
+          fi
+
           cat "$response_file"
           rm -f "$response_file"
 
