@@ -33,7 +33,7 @@ async def get_lakes_geojson(response: Response) -> LakeCollection:
             ecological_status,
             total_phosphorus,
             label_text,
-            ST_AsGeoJSON(ST_Transform(geometry, 4326)) AS geometry_json
+            ST_AsGeoJSON(ST_Transform(geom, 4326)) AS geometry_json
         FROM lakes
         ORDER BY lake_name
     """
