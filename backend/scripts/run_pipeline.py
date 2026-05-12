@@ -74,7 +74,7 @@ def check_db(database_url: str) -> bool:
 def normalize_database_url(url: str) -> str:
     """Normalize common non-SQLAlchemy Postgres URL forms."""
     if url.startswith("postgres://"):
-        return "postgresql://" + url[len("postgres://") :]
+        return url.replace("postgres://", "postgresql://", 1)
     return url
 
 
