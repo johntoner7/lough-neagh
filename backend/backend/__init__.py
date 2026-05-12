@@ -16,7 +16,7 @@ from pathlib import Path
 _parent_backend_dir = Path(__file__).resolve().parent.parent
 _parent_str = str(_parent_backend_dir)
 _module = sys.modules[__name__]
-_package_path = list(getattr(_module, "__path__", []))
-if _parent_str not in _package_path:
-    _package_path.append(_parent_str)
-_module.__path__ = _package_path
+if not hasattr(_module, "__path__"):
+    _module.__path__ = []
+if _parent_str not in _module.__path__:
+    _module.__path__.append(_parent_str)
