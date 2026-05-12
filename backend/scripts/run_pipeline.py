@@ -9,6 +9,9 @@ Usage:
 
     # Run against production (requires explicit flag)
     DATABASE_URL=<railway-url> uv run python -m backend.scripts.run_pipeline --production
+
+    # Run against production non-interactively (e.g. in CI)
+    DATABASE_URL=<railway-url> uv run python -m backend.scripts.run_pipeline --production --yes
 """
 
 from __future__ import annotations
@@ -95,6 +98,8 @@ def main() -> None:
                         help="Required when targeting a remote host")
     parser.add_argument("--db-url", metavar="URL",
                         help="Override DATABASE_URL (useful when the injected URL is internal-only)")
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip interactive confirmation (for CI/non-interactive environments)")
     args = parser.parse_args()
 
     database_url = (
@@ -146,10 +151,13 @@ def main() -> None:
             "\n⚠  You are about to overwrite the PRODUCTION database.\n"
             "   All tables will be truncated and reloaded from local data files.\n"
         )
-        confirm = input("   Type 'yes' to continue: ").strip().lower()
-        if confirm != "yes":
-            print("Aborted.")
-            sys.exit(0)
+        if args.yes:
+            print("   --yes flag set, skipping confirmation.")
+        else:
+            confirm = input("   Type 'yes' to continue: ").strip().lower()
+            if confirm != "yes":
+                print("Aborted.")
+                sys.exit(0)
 
     # ── Initialise schema ─────────────────────────────────────────────────────
     print("\n=== Initialising schema ===\n")
