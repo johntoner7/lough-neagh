@@ -13,7 +13,7 @@ on:
         type: string
       seed_endpoint:
         description: Seed API path (for example /seed)
-        required: true
+        required: false
         default: /seed
         type: string
 
