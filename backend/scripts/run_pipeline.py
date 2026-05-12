@@ -26,7 +26,7 @@ from sqlalchemy import create_engine, text
 
 # ─── Required source files ────────────────────────────────────────────────────
 
-DATA_ROOT = Path("data/raw")
+DATA_ROOT = Path(__file__).resolve().parents[2] / "data" / "raw"
 
 REQUIRED_FILES = {
     "FOI readings":    DATA_ROOT / "foi" / "annex_a.csv",
@@ -71,6 +71,13 @@ def check_db(database_url: str) -> bool:
         return False
 
 
+def normalize_database_url(url: str) -> str:
+    """Normalize common non-SQLAlchemy Postgres URL forms."""
+    if url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
 def current_row_counts(database_url: str) -> dict[str, int]:
     tables = ["stations", "readings", "annual_metrics", "trend_results",
               "waterbodies", "lakes", "farm_census_wards"]
@@ -108,6 +115,7 @@ def main() -> None:
         or os.environ.get("DATABASE_URL")
         or "postgresql://user:password@localhost:5433/phosphorus_db"
     )
+    database_url = normalize_database_url(database_url)
 
     print("\n=== Pre-flight checks ===\n")
 
