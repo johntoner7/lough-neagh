@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-_PARENT_BACKEND_DIR = Path(__file__).resolve().parent.parent
-_parent_str = str(_PARENT_BACKEND_DIR)
+_parent_backend_dir = Path(__file__).resolve().parent.parent
+_parent_str = str(_parent_backend_dir)
 if _parent_str not in __path__:
     __path__.append(_parent_str)
