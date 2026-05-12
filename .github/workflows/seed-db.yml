@@ -49,7 +49,7 @@ jobs:
             cat "$response_file"
             rm -f "$response_file"
             echo "Seed request failed before receiving an HTTP response (curl exit code: $curl_exit_code)." >&2
-            echo "Attempted URL: $request_url" >&2
+            echo "Attempted API base URL: $base_url" >&2
             echo "Check that api_url points to your public API service URL and seed_endpoint is correct." >&2
             exit "$curl_exit_code"
           }
