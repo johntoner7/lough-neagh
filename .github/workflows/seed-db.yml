@@ -35,8 +35,12 @@ jobs:
             *) base_url="https://$base_url" ;;
           esac
 
-          endpoint="/$(printf '%s' "$SEED_ENDPOINT" | sed 's#^/*##')"
-          request_url="${base_url}${endpoint}"
+          endpoint_path="$(printf '%s' "$SEED_ENDPOINT" | sed 's#^/*##; s#/*$##')"
+          if [ -n "$endpoint_path" ]; then
+            request_url="${base_url}/${endpoint_path}"
+          else
+            request_url="${base_url}"
+          fi
 
           response_file="$(mktemp)"
           status_code="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST "$request_url" \
@@ -45,6 +49,7 @@ jobs:
             cat "$response_file"
             rm -f "$response_file"
             echo "Seed request failed before receiving an HTTP response (curl exit code: $curl_exit_code)." >&2
+            echo "Attempted URL: $request_url" >&2
             echo "Check that api_url points to your public API service URL and seed_endpoint is correct." >&2
             exit "$curl_exit_code"
           }
