@@ -16,6 +16,7 @@ jobs:
   seed-production-database:
     name: Seed Production Database
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Seed database
         env:
