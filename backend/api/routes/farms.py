@@ -8,6 +8,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import Response
 
 from api.db import get_conn
+from api.services.farms import build_farm_cache_key, clamp_farm_year
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +77,6 @@ _SQL = """
     )::text AS result
     FROM agg
 """
-
-
-def _clamp_year(year: int) -> int:
-    return max(_CENSUS_MIN_YEAR, min(_CENSUS_MAX_YEAR, year))
-
-
 async def _fetch_farms_json(year: int, catchment: str | None = None) -> bytes:
     async with get_conn() as conn:
         cur = await conn.execute(
@@ -123,9 +118,9 @@ async def get_farms_geojson(
     - lu_per_ha: livestock units per hectare (cattle×1 + sheep×0.15 + pigs×0.25)
     - cattle, sheep, pigs, num_farms, area_ha
     """
-    census_year = _clamp_year(year)
+    census_year = clamp_farm_year(year, _CENSUS_MIN_YEAR, _CENSUS_MAX_YEAR)
     response.headers["Cache-Control"] = "public, max-age=86400"
-    cache_key = (census_year, catchment)
+    cache_key = build_farm_cache_key(census_year, catchment)
 
     if cache_key not in _geojson_cache:
         _geojson_cache[cache_key] = await _fetch_farms_json(census_year, catchment)

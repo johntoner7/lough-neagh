@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS lakes (
     ecological_status   TEXT,
     total_phosphorus    TEXT,
     label_text          TEXT,
-    geom                GEOMETRY(POLYGON, 29902)
+    geom                GEOMETRY(MULTIPOLYGON, 29902)
 );
 
 CREATE TABLE IF NOT EXISTS farm_census_wards (
@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS farm_census_wards (
     pigs            INTEGER,
     cattle_per_ha   FLOAT,
     lu_per_ha       FLOAT,
-    geometry        GEOMETRY(POLYGON, 4326),
+    geometry        GEOMETRY(MULTIPOLYGON, 4326),
     UNIQUE(ward_code, year)
 );
 

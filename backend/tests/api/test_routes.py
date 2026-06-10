@@ -288,3 +288,100 @@ class TestFarmsGeoJSON:
     def test_cache_header(self, client: TestClient) -> None:
         r = client.get("/farms/geojson")
         assert "public" in r.headers.get("cache-control", "")
+
+
+# ---------------------------------------------------------------------------
+# /river-segments/*
+# ---------------------------------------------------------------------------
+
+class TestRiverSegmentsGeometry:
+    def test_returns_feature_collection(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geometry")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["type"] == "FeatureCollection"
+        assert isinstance(body["features"], list)
+        assert len(body["features"]) > 0
+
+    def test_features_have_numeric_id(self, client: TestClient) -> None:
+        features = client.get("/river-segments/geometry").json()["features"]
+        for f in features[:5]:
+            assert "id" in f
+            assert isinstance(f["id"], (int, str))
+
+    def test_catchment_filter_reduces_results(self, client: TestClient) -> None:
+        full = client.get("/river-segments/geometry").json()["features"]
+        filtered = client.get("/river-segments/geometry", params={"catchment": KNOWN_CATCHMENT}).json()["features"]
+        assert 0 < len(filtered) < len(full)
+
+    def test_cache_header(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geometry")
+        assert "public" in r.headers.get("cache-control", "")
+
+
+class TestRiverSegmentsMetrics:
+    def test_returns_dict_keyed_by_segment_id(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics", params={"year": RECENT_YEAR})
+        assert r.status_code == 200
+        body = r.json()
+        assert isinstance(body, dict)
+        assert len(body) > 0
+
+    def test_values_are_float_or_null(self, client: TestClient) -> None:
+        body = client.get("/river-segments/metrics", params={"year": RECENT_YEAR}).json()
+        for v in list(body.values())[:20]:
+            assert v is None or isinstance(v, float)
+
+    def test_annual_metric(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics", params={"year": RECENT_YEAR, "metric": "annual"})
+        assert r.status_code == 200
+        assert isinstance(r.json(), dict)
+
+    def test_invalid_metric_rejected(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics", params={"year": RECENT_YEAR, "metric": "invalid"})
+        assert r.status_code == 422
+
+    def test_missing_year_rejected(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics")
+        assert r.status_code == 422
+
+    def test_catchment_filter(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics", params={"year": RECENT_YEAR, "catchment": KNOWN_CATCHMENT})
+        assert r.status_code == 200
+        assert isinstance(r.json(), dict)
+
+    def test_cache_header(self, client: TestClient) -> None:
+        r = client.get("/river-segments/metrics", params={"year": RECENT_YEAR})
+        assert "public" in r.headers.get("cache-control", "")
+
+
+class TestRiverSegmentsGeoJSON:
+    def test_returns_feature_collection(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geojson", params={"year": RECENT_YEAR})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["type"] == "FeatureCollection"
+        assert isinstance(body["features"], list)
+        assert len(body["features"]) > 0
+
+    def test_features_have_metric_property(self, client: TestClient) -> None:
+        features = client.get("/river-segments/geojson", params={"year": RECENT_YEAR}).json()["features"]
+        for f in features[:5]:
+            assert "metric_p_sol" in f["properties"]
+
+    def test_missing_year_rejected(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geojson")
+        assert r.status_code == 422
+
+    def test_invalid_metric_rejected(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geojson", params={"year": RECENT_YEAR, "metric": "invalid"})
+        assert r.status_code == 422
+
+    def test_cache_header(self, client: TestClient) -> None:
+        r = client.get("/river-segments/geojson", params={"year": RECENT_YEAR})
+        assert "public" in r.headers.get("cache-control", "")
+
+    def test_catchment_filter_reduces_results(self, client: TestClient) -> None:
+        full = client.get("/river-segments/geojson", params={"year": RECENT_YEAR}).json()["features"]
+        filtered = client.get("/river-segments/geojson", params={"year": RECENT_YEAR, "catchment": KNOWN_CATCHMENT}).json()["features"]
+        assert 0 < len(filtered) < len(full)

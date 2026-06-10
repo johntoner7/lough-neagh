@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point, LineString, MultiLineString
+from shapely.geometry import Point, LineString, MultiLineString, MultiPolygon
 from shapely.ops import linemerge
 from sqlalchemy import text
 
@@ -56,6 +56,10 @@ def insert_stations(enriched_stations_gdf: gpd.GeoDataFrame, engine) -> None:
         conn.execute(text("TRUNCATE TABLE readings RESTART IDENTITY;"))
         conn.execute(text("TRUNCATE TABLE stations RESTART IDENTITY CASCADE;"))
     stations.to_postgis("stations", engine, if_exists="append", index=False, chunksize=100)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE stations SET geom_4326 = ST_Transform(geom, 4326) WHERE geom IS NOT NULL;"
+        ))
 
 
 def insert_readings(readings_df: pd.DataFrame, engine) -> None:
@@ -77,45 +81,50 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
 
 def insert_waterbodies(waterbodies_gdf: gpd.GeoDataFrame, engine) -> None:
     """Truncate and reload the waterbodies table."""
+    gdf = waterbodies_gdf.rename_geometry("geom")
+    gdf["geom"] = gdf["geom"].apply(
+        lambda g: g if g is None or isinstance(g, MultiPolygon) else MultiPolygon([g])
+    )
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE waterbodies RESTART IDENTITY;"))
-    waterbodies_gdf.to_postgis("waterbodies", engine, if_exists="append", index=False, chunksize=50)
+    gdf.to_postgis("waterbodies", engine, if_exists="append", index=False, chunksize=50)
 
 
 def insert_lakes(lakes_gdf: gpd.GeoDataFrame, engine) -> None:
     """Truncate and reload the lakes table."""
+    gdf = lakes_gdf.rename_geometry("geom")
+    gdf["geom"] = gdf["geom"].apply(
+        lambda g: g if g is None or isinstance(g, MultiPolygon) else MultiPolygon([g])
+    )
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE lakes RESTART IDENTITY;"))
-    lakes_gdf.to_postgis("lakes", engine, if_exists="append", index=False, chunksize=50)
+    gdf.to_postgis("lakes", engine, if_exists="append", index=False, chunksize=50)
+
+
+def _to_linestring(geom):
+    if geom is None:
+        return None
+    if isinstance(geom, LineString):
+        return geom
+    if isinstance(geom, MultiLineString):
+        merged = linemerge(geom)
+        if isinstance(merged, LineString):
+            return merged
+        parts = list(merged.geoms) if hasattr(merged, "geoms") else list(geom.geoms)
+        if parts:
+            return max(parts, key=lambda g: g.length)
+    return geom
 
 
 def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
     """Truncate and reload the river_segments table."""
     gdf = segments_gdf.copy()
-    # DB column is named 'geom'; rename the active geometry column to match
     gdf = gdf.rename_geometry("geom")
-    # If the GeoDataFrame contains duplicate rseg_cd values, drop them to
-    # avoid unique constraint violations during bulk copy.
     if "rseg_cd" in gdf.columns:
         dup_count = int(gdf["rseg_cd"].duplicated(keep=False).sum())
         if dup_count:
             print(f"Warning: {dup_count} duplicate rseg_cd values found — dropping duplicates before insert")
             gdf = gdf.drop_duplicates(subset=["rseg_cd"])
-
-    # Convert MultiLineString geometries to LineString to match DB column type.
-    def _to_linestring(geom):
-        if geom is None:
-            return None
-        if isinstance(geom, LineString):
-            return geom
-        if isinstance(geom, MultiLineString):
-            merged = linemerge(geom)
-            if isinstance(merged, LineString):
-                return merged
-            parts = list(merged.geoms) if hasattr(merged, "geoms") else list(geom.geoms)
-            if parts:
-                return max(parts, key=lambda g: g.length)
-        return geom
 
     multi_count = int((gdf["geom"].geom_type == "MultiLineString").sum())
     if multi_count:
@@ -125,3 +134,10 @@ def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE river_segments RESTART IDENTITY CASCADE;"))
     gdf.to_postgis("river_segments", engine, if_exists="append", index=False, chunksize=500)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE river_segments SET geom_4326 = ST_Transform(geom, 4326) WHERE geom IS NOT NULL;"
+        ))
+        conn.execute(text(
+            "UPDATE river_segments SET geom_simplified = ST_SimplifyPreserveTopology(geom_4326, 0.001) WHERE geom_4326 IS NOT NULL;"
+        ))
