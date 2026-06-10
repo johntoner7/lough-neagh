@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
-
-from sqlalchemy import create_engine
 
 import geopandas as gpd
 import pandas as pd
+from sqlalchemy import create_engine, text
 
 from backend.pipeline.ingest.farm_census import backfill_farm_census_catchments, insert_farm_census
 from backend.pipeline.ingest.foi import load_and_clean_foi
@@ -22,6 +22,7 @@ from backend.pipeline.process.metrics import (
     compute_trend_results,
     insert_annual_metrics,
     insert_trend_results,
+    load_annual_data_for_trends,
 )
 
 _DATA_RAW = Path(__file__).parents[3] / "data" / "raw"
@@ -74,7 +75,8 @@ def compute_metrics(database_url: str) -> dict[str, int]:
     annual_df = compute_rolling_means(annual_df)
     insert_annual_metrics(annual_df, engine)
 
-    trend_df = compute_trend_results(engine)
+    trend_input = load_annual_data_for_trends(engine)
+    trend_df = compute_trend_results(trend_input)
     insert_trend_results(trend_df, engine)
 
     return {
@@ -100,7 +102,6 @@ def ingest_farms(database_url: str) -> dict[str, int]:
 def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
     """Ingest all sources and compute derived metrics."""
     if database_url is None:
-        import os
         database_url = (
             os.environ.get("DATABASE_PUBLIC_URL")
             or os.environ.get("DATABASE_URL")
@@ -114,6 +115,11 @@ def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
         f"{len(enriched)} stations, {len(readings_df)} readings",
         flush=True,
     )
+
+    print("  Clearing geojson cache...", flush=True)
+    _cache_engine = create_engine(database_url)
+    with _cache_engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE geojson_cache;"))
 
     print("  Persisting data...", flush=True)
     persist_summary = persist_data(waterbodies, lakes, enriched, readings_df, database_url)

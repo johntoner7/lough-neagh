@@ -36,9 +36,7 @@ class _JsonFormatter(logging.Formatter):
         return json.dumps(payload)
 
 
-def configure_logging() -> None:
-    fmt = os.environ.get("LOG_FORMAT", "text")
-    level = os.environ.get("LOG_LEVEL", "INFO").upper()
+def configure_logging(fmt: str = "text", level: str = "INFO") -> None:
 
     handler = logging.StreamHandler()
     if fmt == "json":

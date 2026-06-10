@@ -1,4 +1,13 @@
-"""FastAPI application entry point."""
+"""FastAPI application entry point.
+
+Schema initialisation and data migrations are intentionally NOT run here.
+Run them once before starting (or deploying) the API:
+
+    uv run python -m scripts.init_db
+    uv run python -m scripts.create_tables
+
+The lifespan only opens the connection pool and warms in-process caches.
+"""
 
 from __future__ import annotations
 
@@ -17,32 +26,20 @@ from psycopg_pool import PoolTimeout
 
 load_dotenv()
 
+from api.config import Settings
 from api.db import close_pool, get_conn, init_pool
 from api.logging_config import configure_logging
 from api.routes import catchments, farms, lakes, river_segments, stations
-from pipeline.ingest.farm_census import backfill_farm_census_catchments
-from scripts.create_tables import main as create_tables
-from scripts.init_db import main as init_db
 
-configure_logging()
 logger = logging.getLogger(__name__)
-
-
-def _init_db() -> None:
-    """Ensure PostGIS extensions and schema tables exist on startup."""
-    database_url = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-
-    init_db(database_url)
-    create_tables(database_url)
-    backfill_farm_census_catchments(database_url)
-    logger.info("Database schema ensured")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings = Settings.from_env()
+    configure_logging(settings.log_format, settings.log_level)
     logger.info("API starting up")
-    await asyncio.to_thread(_init_db)
-    await init_pool()
+    await init_pool(settings)
     asyncio.create_task(stations.warm_cache())
     asyncio.create_task(farms.warm_cache())
     asyncio.create_task(river_segments.warm_cache())
@@ -70,6 +67,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.perf_counter()
@@ -93,7 +91,10 @@ async def log_requests(request: Request, call_next):
 @app.exception_handler(PoolTimeout)
 async def pool_timeout_handler(request: Request, exc: PoolTimeout):
     logger.warning("Connection pool timeout: %s", exc)
-    return JSONResponse(status_code=503, content={"detail": "Service temporarily unavailable, please retry"})
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Service temporarily unavailable, please retry"},
+    )
 
 
 app.include_router(stations.router)
@@ -111,7 +112,7 @@ def get_config() -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    """Health check — also verifies database connectivity."""
+    """Liveness check — verifies database connectivity."""
     try:
         async with get_conn() as conn:
             await conn.execute("SELECT 1")
@@ -120,6 +121,21 @@ async def health() -> dict:
         logger.exception("Database health check failed")
         db_status = "unavailable"
     return {"status": "ok", "database": db_status}
+
+
+@app.get("/readiness")
+async def readiness() -> dict:
+    """Readiness check — fails fast if the DB is unreachable (used by load balancers)."""
+    try:
+        async with get_conn() as conn:
+            await conn.execute("SELECT 1")
+    except Exception as exc:
+        logger.warning("Readiness check failed: %s", exc)
+        return JSONResponse(
+            status_code=503,
+            content={"ready": False, "reason": "database unavailable"},
+        )
+    return {"ready": True}
 
 
 @app.get("/")
@@ -150,6 +166,7 @@ async def root() -> dict:
             "lakes_geojson": "/lakes/geojson",
             "river_segments_geojson": "/river-segments/geojson?year={year}",
             "health": "/health",
+            "readiness": "/readiness",
             "docs": "/docs",
         },
     }

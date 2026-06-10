@@ -6,6 +6,8 @@ import pandas as pd
 import pymannkendall as mk
 from sqlalchemy import text
 
+from backend.api.constants import WFD_THRESHOLD_MG_L
+
 
 def compute_annual_means(engine) -> pd.DataFrame:
     """
@@ -13,22 +15,24 @@ def compute_annual_means(engine) -> pd.DataFrame:
     - Compute mean P(SOL)
     - Count readings
     - Flag sparse years (reading_count < 8)
-    - Compute WFD compliance (annual_mean <= 0.035 mg/l)
+    - Compute WFD compliance (annual_mean <= WFD_THRESHOLD_MG_L)
     """
-    query = """
-    SELECT
-        station_code,
-        DATE_PART('year', reading_date)::INTEGER as year,
-        AVG(p_sol_mg_l) as annual_mean_p_sol,
-        COUNT(*) as reading_count,
-        COUNT(*) < 8 as sparse_year,
-        AVG(p_sol_mg_l) <= 0.035 as wfd_compliant
-    FROM readings
-    WHERE p_sol_mg_l IS NOT NULL AND p_sol_mg_l > 0
-    GROUP BY station_code, year
-    ORDER BY station_code, year
-    """
-    return pd.read_sql_query(query, engine)
+    query = text("""
+        SELECT
+            station_code,
+            DATE_PART('year', reading_date)::INTEGER AS year,
+            AVG(p_sol_mg_l)                          AS annual_mean_p_sol,
+            COUNT(*)                                  AS reading_count,
+            COUNT(*) < 8                              AS sparse_year,
+            AVG(p_sol_mg_l) <= :threshold             AS wfd_compliant
+        FROM readings
+        WHERE p_sol_mg_l IS NOT NULL AND p_sol_mg_l > 0
+        GROUP BY station_code, year
+        ORDER BY station_code, year
+    """)
+    with engine.connect() as conn:
+        result = conn.execute(query, {"threshold": WFD_THRESHOLD_MG_L})
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
@@ -36,49 +40,39 @@ def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
     For each station, compute centred 5-year rolling mean of annual_mean_p_sol.
     Only computes where a complete ±2 year window with at least 3 non-sparse years exists.
     """
-    annual_df = annual_df.copy()
-    annual_df["rolling_mean_5yr"] = None
+    df = annual_df.copy()
+    df["rolling_mean_5yr"] = None
 
-    for station in annual_df["station_code"].unique():
-        station_data = annual_df[annual_df["station_code"] == station].copy()
-        station_data = station_data.sort_values("year").reset_index(drop=True)
+    for _, group in df.groupby("station_code"):
+        group = group.sort_values("year")
 
-        for _, row in station_data.iterrows():
+        for idx, row in group.iterrows():
             year = row["year"]
-            window = station_data[station_data["year"].isin(range(year - 2, year + 3))]
+            window = group[group["year"].between(year - 2, year + 2)]
 
             if len(window) < 5:
                 continue
-
             valid = window[~window["sparse_year"]]
             if len(valid) < 3:
                 continue
 
-            loc = annual_df[
-                (annual_df["station_code"] == station) & (annual_df["year"] == year)
-            ].index
-            if not loc.empty:
-                annual_df.loc[loc[0], "rolling_mean_5yr"] = float(valid["annual_mean_p_sol"].mean())
+            df.loc[idx, "rolling_mean_5yr"] = float(valid["annual_mean_p_sol"].mean())
 
-    return annual_df
+    return df
 
 
-def compute_trend_results(engine) -> pd.DataFrame:
+def compute_trend_results(annual_data: pd.DataFrame) -> pd.DataFrame:
     """
-    For each station with at least 8 non-sparse annual means since 2010:
-    run Mann-Kendall test and return trend direction, p-value, and Sen slope.
-    """
-    annual_data = pd.read_sql_query(
-        """
-        SELECT station_code, year, annual_mean_p_sol, sparse_year
-        FROM annual_metrics
-        WHERE year >= 2010
-        ORDER BY station_code, year
-        """,
-        engine,
-    )
+    Pure: compute Mann-Kendall trend results from a DataFrame of annual metrics.
 
-    results = []
+    Input DataFrame must have columns: station_code, year, annual_mean_p_sol, sparse_year.
+    Typically filtered to year >= 2010 before calling.
+
+    For each station with at least 8 non-sparse annual means, runs Mann-Kendall
+    and returns trend direction, p-value, and Sen slope.
+    """
+    results: list[dict] = []
+
     for station in annual_data["station_code"].unique():
         series = annual_data[annual_data["station_code"] == station].sort_values("year")
         valid = series[~series["sparse_year"]]
@@ -87,16 +81,16 @@ def compute_trend_results(engine) -> pd.DataFrame:
             r = mk.original_test(valid["annual_mean_p_sol"].values)
             direction = r.trend if r.trend in ("increasing", "decreasing") else "no trend"
             results.append({
-                "station_code": station,
+                "station_code": int(station),
                 "trend_direction": direction,
-                "p_value": r.p,
-                "sens_slope": r.slope,
-                "significant": r.p < 0.05,
+                "p_value": float(r.p),
+                "sens_slope": float(r.slope),
+                "significant": bool(r.p < 0.05),
                 "years_analysed": len(valid),
             })
         else:
             results.append({
-                "station_code": station,
+                "station_code": int(station),
                 "trend_direction": "insufficient data",
                 "p_value": None,
                 "sens_slope": None,
@@ -105,6 +99,19 @@ def compute_trend_results(engine) -> pd.DataFrame:
             })
 
     return pd.DataFrame(results)
+
+
+def load_annual_data_for_trends(engine) -> pd.DataFrame:
+    """Load post-2010 annual metrics from the database for trend computation."""
+    query = text("""
+        SELECT station_code, year, annual_mean_p_sol, sparse_year
+        FROM annual_metrics
+        WHERE year >= 2010
+        ORDER BY station_code, year
+    """)
+    with engine.connect() as conn:
+        result = conn.execute(query)
+        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
 
 def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:

@@ -2,23 +2,26 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import TYPE_CHECKING, AsyncGenerator
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
 
+if TYPE_CHECKING:
+    from api.config import Settings
+
 _pool: AsyncConnectionPool | None = None
 
 
-def _database_url() -> str:
-    return os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-
-
-async def init_pool() -> None:
+async def init_pool(settings: Settings) -> None:
     global _pool
-    _pool = AsyncConnectionPool(conninfo=_database_url(), min_size=2, max_size=20, open=False)
+    _pool = AsyncConnectionPool(
+        conninfo=settings.database_url,
+        min_size=settings.pool_min_size,
+        max_size=settings.pool_max_size,
+        open=False,
+    )
     await _pool.open()
 
 
@@ -31,6 +34,6 @@ async def close_pool() -> None:
 
 @asynccontextmanager
 async def get_conn() -> AsyncGenerator[psycopg.AsyncConnection, None]:
-    assert _pool is not None, "Pool not initialised"
+    assert _pool is not None, "Connection pool not initialised — call init_pool() first"
     async with _pool.connection() as conn:
         yield conn

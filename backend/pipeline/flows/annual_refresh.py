@@ -20,17 +20,17 @@ import sys
 from typing import Any
 
 import pandas as pd
-import pymannkendall as mk
 from sqlalchemy import create_engine, text
 
+from backend.api.constants import WFD_THRESHOLD_MG_L
 from backend.pipeline.ingest.foi import load_and_clean_foi
-from backend.pipeline.process.metrics import compute_rolling_means
+from backend.pipeline.process.annual_refresh import (
+    build_annual_metrics_insert_df,
+    prepare_new_readings_for_insert,
+)
+from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
 
 logger = logging.getLogger(__name__)
-
-
-def _engine(database_url: str):
-    return create_engine(database_url)
 
 
 def identify_new_readings(csv_path: str, engine) -> pd.DataFrame:
@@ -38,10 +38,11 @@ def identify_new_readings(csv_path: str, engine) -> pd.DataFrame:
     _, readings_df = load_and_clean_foi(csv_path)
     readings_df["reading_date"] = pd.to_datetime(readings_df["reading_date"])
 
-    existing = pd.read_sql_query(
-        "SELECT station_code::bigint AS station_code, reading_date FROM readings",
-        engine,
-    )
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("SELECT station_code::bigint AS station_code, reading_date FROM readings")
+        )
+        existing = pd.DataFrame(result.fetchall(), columns=["station_code", "reading_date"])
     existing["reading_date"] = pd.to_datetime(existing["reading_date"])
 
     merged = readings_df.merge(
@@ -66,29 +67,12 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
         logger.info("No new readings to insert — database is already up to date.")
         return {"new_readings": 0, "affected_stations": [], "affected_years": []}
 
-    columns = [
-        "station_code", "reading_date", "p_sol_mg_l", "p_tot_mg_l",
-        "no3_n_mg_l", "no2_n_mg_l", "below_detection", "sparse_year",
-    ]
-    insert_df = new_readings_df[columns].copy()
-    insert_df["station_code"] = pd.to_numeric(
-        insert_df["station_code"], errors="coerce"
-    ).astype("Int64")
-    insert_df["reading_date"] = pd.to_datetime(
-        insert_df["reading_date"], errors="coerce"
-    ).dt.date
+    insert_df, affected_stations, affected_years = prepare_new_readings_for_insert(new_readings_df)
 
     insert_df.to_sql(
         "readings", engine,
         if_exists="append", index=False,
         chunksize=10_000, method="multi",
-    )
-
-    affected_stations = sorted(
-        int(s) for s in new_readings_df["station_code"].dropna().unique()
-    )
-    affected_years = sorted(
-        int(y) for y in pd.to_datetime(new_readings_df["reading_date"]).dt.year.unique()
     )
 
     logger.info(
@@ -106,45 +90,35 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
 
 def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
     """Delete and recompute annual_metrics + rolling means for affected stations."""
-    station_list = ", ".join(str(int(s)) for s in affected_stations)
-
-    annual_df = pd.read_sql_query(
-        f"""
-        SELECT
-            station_code,
-            DATE_PART('year', reading_date)::INTEGER AS year,
-            AVG(p_sol_mg_l)                          AS annual_mean_p_sol,
-            COUNT(*)                                  AS reading_count,
-            COUNT(*) < 8                              AS sparse_year,
-            AVG(p_sol_mg_l) <= 0.035                 AS wfd_compliant
-        FROM readings
-        WHERE p_sol_mg_l IS NOT NULL
-          AND p_sol_mg_l > 0
-          AND station_code IN ({station_list})
-        GROUP BY station_code, year
-        ORDER BY station_code, year
-        """,
-        engine,
-    )
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT
+                    station_code,
+                    DATE_PART('year', reading_date)::INTEGER AS year,
+                    AVG(p_sol_mg_l)                          AS annual_mean_p_sol,
+                    COUNT(*)                                  AS reading_count,
+                    COUNT(*) < 8                              AS sparse_year,
+                    AVG(p_sol_mg_l) <= :threshold             AS wfd_compliant
+                FROM readings
+                WHERE p_sol_mg_l IS NOT NULL
+                  AND p_sol_mg_l > 0
+                  AND station_code = ANY(:codes)
+                GROUP BY station_code, year
+                ORDER BY station_code, year
+            """),
+            {"threshold": WFD_THRESHOLD_MG_L, "codes": affected_stations},
+        )
+        annual_df = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
     annual_df = compute_rolling_means(annual_df)
-
-    insert_df = annual_df[[
-        "station_code", "year", "annual_mean_p_sol",
-        "reading_count", "sparse_year", "wfd_compliant", "rolling_mean_5yr",
-    ]].copy()
-    insert_df["station_code"] = insert_df["station_code"].astype("Int64")
-    insert_df["year"] = insert_df["year"].astype("int64")
-    insert_df["annual_mean_p_sol"] = insert_df["annual_mean_p_sol"].apply(
-        lambda x: float(x) if pd.notna(x) else None
-    )
-    insert_df["reading_count"] = insert_df["reading_count"].astype("Int64")
-    insert_df["rolling_mean_5yr"] = insert_df["rolling_mean_5yr"].apply(
-        lambda x: float(x) if pd.notna(x) else None
-    )
+    insert_df = build_annual_metrics_insert_df(annual_df)
 
     with engine.begin() as conn:
-        conn.execute(text(f"DELETE FROM annual_metrics WHERE station_code IN ({station_list})"))
+        conn.execute(
+            text("DELETE FROM annual_metrics WHERE station_code = ANY(:codes)"),
+            {"codes": affected_stations},
+        )
 
     insert_df.to_sql(
         "annual_metrics", engine,
@@ -162,61 +136,38 @@ def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
 
 def recompute_trend_results(affected_stations: list[int], engine) -> int:
     """Recompute Mann-Kendall trend results for affected stations."""
-    station_list = ", ".join(str(int(s)) for s in affected_stations)
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                SELECT station_code, year, annual_mean_p_sol, sparse_year
+                FROM annual_metrics
+                WHERE year >= 2010
+                  AND station_code = ANY(:codes)
+                ORDER BY station_code, year
+            """),
+            {"codes": affected_stations},
+        )
+        annual_data = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
 
-    annual_data = pd.read_sql_query(
-        f"""
-        SELECT station_code, year, annual_mean_p_sol, sparse_year
-        FROM annual_metrics
-        WHERE year >= 2010
-          AND station_code IN ({station_list})
-        ORDER BY station_code, year
-        """,
-        engine,
-    )
+    trend_df = compute_trend_results(annual_data)
 
-    results = []
-    for station in annual_data["station_code"].unique():
-        series = annual_data[annual_data["station_code"] == station].sort_values("year")
-        valid = series[~series["sparse_year"]]
-
-        if len(valid) >= 8:
-            r = mk.original_test(valid["annual_mean_p_sol"].values)
-            direction = r.trend if r.trend in ("increasing", "decreasing") else "no trend"
-            results.append({
-                "station_code": int(station),
-                "trend_direction": direction,
-                "p_value": float(r.p),
-                "sens_slope": float(r.slope),
-                "significant": bool(r.p < 0.05),
-                "years_analysed": len(valid),
-            })
-        else:
-            results.append({
-                "station_code": int(station),
-                "trend_direction": "insufficient data",
-                "p_value": None,
-                "sens_slope": None,
-                "significant": False,
-                "years_analysed": len(valid),
-            })
-
-    if not results:
+    if trend_df.empty:
         logger.info("No trend results to update.")
         return 0
 
-    trend_df = pd.DataFrame(results)
-
     with engine.begin() as conn:
-        conn.execute(text(f"DELETE FROM trend_results WHERE station_code IN ({station_list})"))
+        conn.execute(
+            text("DELETE FROM trend_results WHERE station_code = ANY(:codes)"),
+            {"codes": affected_stations},
+        )
 
     trend_df.to_sql(
         "trend_results", engine,
         if_exists="append", index=False, method="multi",
     )
 
-    logger.info("Updated trend results for %d stations.", len(results))
-    return len(results)
+    logger.info("Updated trend results for %d stations.", len(trend_df))
+    return len(trend_df)
 
 
 def annual_refresh(
@@ -232,8 +183,10 @@ def annual_refresh(
     4. Recompute annual_metrics and 5-year rolling means for affected stations only.
     5. Recompute Mann-Kendall trend results for affected stations only.
     """
-    url = database_url or os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
-    engine = _engine(url)
+    url = database_url or os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is required")
+    engine = create_engine(url)
 
     new_readings = identify_new_readings(csv_path, engine)
     summary = insert_new_readings(new_readings, engine)

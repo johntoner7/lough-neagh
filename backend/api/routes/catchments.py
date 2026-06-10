@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
-from psycopg.rows import dict_row
 
 from api.db import get_conn
 from api.models import CatchmentSummary, StationProperties
+from api.repositories import catchments as catchment_repo
+from api.services.catchments import summarize_catchment_stations
 
 router = APIRouter(prefix="/catchments", tags=["catchments"])
 
@@ -17,11 +18,7 @@ async def list_catchments(response: Response) -> list[str]:
     """Return distinct catchment names from the stations table."""
     response.headers["Cache-Control"] = "public, max-age=86400"
     async with get_conn() as conn:
-        cur = await conn.execute(
-            "SELECT DISTINCT catchment_name FROM stations "
-            "WHERE catchment_name IS NOT NULL ORDER BY catchment_name"
-        )
-        return [row[0] for row in await cur.fetchall()]
+        return await catchment_repo.fetch_catchment_names(conn)
 
 
 @router.get("/{catchment_name}/summary", response_model=CatchmentSummary)
@@ -32,32 +29,8 @@ async def get_catchment_summary(
 ) -> CatchmentSummary:
     """Return all stations in a catchment for a year, with aggregate P(SOL) stats."""
     response.headers["Cache-Control"] = "public, max-age=3600"
-    sql = """
-        SELECT
-            s.station_code,
-            s.location_name,
-            s.catchment_name,
-            s.river_waterbody_id,
-            s.wfd_matched,
-            am.annual_mean_p_sol,
-            am.rolling_mean_5yr,
-            am.wfd_compliant,
-            am.sparse_year,
-            tr.trend_direction,
-            tr.significant        AS trend_significant,
-            tr.sens_slope
-        FROM stations s
-        LEFT JOIN annual_metrics am
-               ON s.station_code = am.station_code AND am.year = %(year)s
-        LEFT JOIN trend_results tr
-               ON s.station_code = tr.station_code
-        WHERE s.catchment_name = %(catchment_name)s
-        ORDER BY s.station_code
-    """
     async with get_conn() as conn:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(sql, {"year": year, "catchment_name": catchment_name})
-            rows = await cur.fetchall()
+        rows = await catchment_repo.fetch_catchment_stations(conn, catchment_name, year)
 
     if not rows:
         raise HTTPException(status_code=404, detail=f"Catchment '{catchment_name}' not found")
@@ -80,11 +53,7 @@ async def get_catchment_summary(
         for r in rows
     ]
 
-    values_with_data = [s.annual_mean_p_sol for s in stations if s.annual_mean_p_sol is not None]
-    mean_p_sol = sum(values_with_data) / len(values_with_data) if values_with_data else None
-
-    above = sum(1 for s in stations if s.wfd_compliant is False)
-    pct_above = (above / len(values_with_data) * 100) if values_with_data else None
+    mean_p_sol, pct_above = summarize_catchment_stations(stations)
 
     return CatchmentSummary(
         catchment_name=catchment_name,
