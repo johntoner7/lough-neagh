@@ -19,13 +19,12 @@ from backend.pipeline.ingest.lakes import load_lakes
 from backend.pipeline.ingest.wfd_sites import load_wfd_sites
 from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
 from backend.pipeline.process.join import enrich_stations, join_segments_to_stations
-from backend.pipeline.process.metrics import (
-    compute_annual_means,
-    compute_rolling_means,
-    compute_trend_results,
-    insert_annual_metrics,
-    insert_trend_results,
-    load_annual_data_for_trends,
+from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
+from backend.pipeline.repositories.metrics import (
+    fetch_annual_means,
+    fetch_annual_data_for_trends,
+    swap_annual_metrics,
+    swap_trend_results,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,13 +75,13 @@ def persist_data(
 def compute_metrics(database_url: str) -> dict[str, int]:
     engine = create_engine(database_url)
 
-    annual_df = compute_annual_means(engine)
+    annual_df = fetch_annual_means(engine)
     annual_df = compute_rolling_means(annual_df)
-    insert_annual_metrics(annual_df, engine)
+    swap_annual_metrics(annual_df, engine)
 
-    trend_input = load_annual_data_for_trends(engine)
+    trend_input = fetch_annual_data_for_trends(engine)
     trend_df = compute_trend_results(trend_input)
-    insert_trend_results(trend_df, engine)
+    swap_trend_results(trend_df, engine)
 
     return {
         "station_years": len(annual_df),

@@ -20,15 +20,18 @@ import sys
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
-from api.constants import WFD_THRESHOLD_MG_L
 from backend.pipeline.ingest.foi import load_and_clean_foi
-from backend.pipeline.process.annual_refresh import (
-    build_annual_metrics_insert_df,
-    prepare_new_readings_for_insert,
-)
+from backend.pipeline.process.annual_refresh import prepare_new_readings_for_insert
 from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
+from backend.pipeline.repositories.metrics import (
+    fetch_annual_means,
+    fetch_annual_data_for_trends,
+    fetch_existing_reading_keys,
+    update_annual_metrics_for_stations,
+    update_trend_results_for_stations,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +41,7 @@ def identify_new_readings(csv_path: str, engine) -> pd.DataFrame:
     _, readings_df = load_and_clean_foi(csv_path)
     readings_df["reading_date"] = pd.to_datetime(readings_df["reading_date"])
 
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT station_code::bigint AS station_code, reading_date FROM readings")
-        )
-        existing = pd.DataFrame(result.fetchall(), columns=["station_code", "reading_date"])
+    existing = fetch_existing_reading_keys(engine)
     existing["reading_date"] = pd.to_datetime(existing["reading_date"])
 
     merged = readings_df.merge(
@@ -90,82 +89,21 @@ def insert_new_readings(new_readings_df: pd.DataFrame, engine) -> dict[str, Any]
 
 def recompute_annual_metrics(affected_stations: list[int], engine) -> int:
     """Delete and recompute annual_metrics + rolling means for affected stations."""
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("""
-                SELECT
-                    station_code,
-                    DATE_PART('year', reading_date)::INTEGER AS year,
-                    AVG(p_sol_mg_l)                          AS annual_mean_p_sol,
-                    COUNT(*)                                  AS reading_count,
-                    COUNT(*) < 8                              AS sparse_year,
-                    AVG(p_sol_mg_l) <= :threshold             AS wfd_compliant
-                FROM readings
-                WHERE p_sol_mg_l IS NOT NULL
-                  AND p_sol_mg_l > 0
-                  AND station_code = ANY(:codes)
-                GROUP BY station_code, year
-                ORDER BY station_code, year
-            """),
-            {"threshold": WFD_THRESHOLD_MG_L, "codes": affected_stations},
-        )
-        annual_df = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
-
+    annual_df = fetch_annual_means(engine, station_codes=affected_stations)
     annual_df = compute_rolling_means(annual_df)
-    insert_df = build_annual_metrics_insert_df(annual_df)
-
-    with engine.begin() as conn:
-        conn.execute(
-            text("DELETE FROM annual_metrics WHERE station_code = ANY(:codes)"),
-            {"codes": affected_stations},
-        )
-
-    insert_df.to_sql(
-        "annual_metrics", engine,
-        if_exists="append", index=False,
-        chunksize=1000, method="multi",
-    )
-
+    update_annual_metrics_for_stations(annual_df, affected_stations, engine)
     logger.info(
         "Recomputed %d station-year metric rows for %d stations.",
-        len(insert_df),
-        len(affected_stations),
+        len(annual_df), len(affected_stations),
     )
-    return len(insert_df)
+    return len(annual_df)
 
 
 def recompute_trend_results(affected_stations: list[int], engine) -> int:
     """Recompute Mann-Kendall trend results for affected stations."""
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("""
-                SELECT station_code, year, annual_mean_p_sol, sparse_year
-                FROM annual_metrics
-                WHERE year >= 2010
-                  AND station_code = ANY(:codes)
-                ORDER BY station_code, year
-            """),
-            {"codes": affected_stations},
-        )
-        annual_data = pd.DataFrame(result.fetchall(), columns=list(result.keys()))
-
+    annual_data = fetch_annual_data_for_trends(engine, station_codes=affected_stations)
     trend_df = compute_trend_results(annual_data)
-
-    if trend_df.empty:
-        logger.info("No trend results to update.")
-        return 0
-
-    with engine.begin() as conn:
-        conn.execute(
-            text("DELETE FROM trend_results WHERE station_code = ANY(:codes)"),
-            {"codes": affected_stations},
-        )
-
-    trend_df.to_sql(
-        "trend_results", engine,
-        if_exists="append", index=False, method="multi",
-    )
-
+    update_trend_results_for_stations(trend_df, affected_stations, engine)
     logger.info("Updated trend results for %d stations.", len(trend_df))
     return len(trend_df)
 

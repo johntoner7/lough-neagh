@@ -4,9 +4,9 @@ import pandas as pd
 
 from backend.pipeline.process.annual_refresh import (
     build_annual_metrics_insert_df,
-    build_trend_results_df,
     prepare_new_readings_for_insert,
 )
+from backend.pipeline.process.metrics import compute_trend_results
 
 
 def test_prepare_new_readings_for_insert_normalizes_dates_and_summaries() -> None:
@@ -74,7 +74,7 @@ def test_build_annual_metrics_insert_df_preserves_expected_shape() -> None:
     assert insert_df.loc[0, "rolling_mean_5yr"] == 0.039
 
 
-def test_build_trend_results_df_classifies_station_trends() -> None:
+def test_compute_trend_results_classifies_station_trends() -> None:
     increasing = pd.DataFrame(
         {
             "station_code": [10233] * 8,
@@ -92,7 +92,7 @@ def test_build_trend_results_df_classifies_station_trends() -> None:
         }
     )
 
-    trend_df = build_trend_results_df(pd.concat([increasing, insufficient], ignore_index=True))
+    trend_df = compute_trend_results(pd.concat([increasing, insufficient], ignore_index=True))
 
     increasing_row = trend_df.loc[trend_df["station_code"] == 10233].iloc[0]
     insufficient_row = trend_df.loc[trend_df["station_code"] == 10380].iloc[0]

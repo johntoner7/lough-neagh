@@ -29,7 +29,7 @@ def _station(years: list[int], values: list[float], sparse: list[bool] | None = 
 
 def _rolling(df: pd.DataFrame, year: int) -> float | None:
     val = df.loc[df["year"] == year, "rolling_mean_5yr"].iloc[0]
-    return None if val is None else float(val)
+    return None if pd.isna(val) else float(val)
 
 
 # ---------------------------------------------------------------------------

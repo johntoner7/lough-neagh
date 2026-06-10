@@ -32,11 +32,15 @@ CREATE TABLE IF NOT EXISTS readings (
     no3_n_mg_l          FLOAT,
     no2_n_mg_l          FLOAT,
     below_detection     BOOLEAN DEFAULT FALSE,
-    sparse_year         BOOLEAN DEFAULT FALSE
+    sparse_year         BOOLEAN DEFAULT FALSE,
+    likely_outlier      BOOLEAN DEFAULT FALSE
 );
 
 ALTER TABLE readings
 ADD COLUMN IF NOT EXISTS p_tot_mg_l FLOAT;
+
+ALTER TABLE readings
+ADD COLUMN IF NOT EXISTS likely_outlier BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS annual_metrics (
     id                  SERIAL PRIMARY KEY,

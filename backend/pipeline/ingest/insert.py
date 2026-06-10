@@ -70,7 +70,7 @@ def insert_readings(readings_df: pd.DataFrame, engine) -> None:
     """Append cleaned readings (stations table was already truncated by insert_stations)."""
     columns = [
         "station_code", "reading_date", "p_sol_mg_l", "p_tot_mg_l",
-        "no3_n_mg_l", "no2_n_mg_l", "below_detection", "sparse_year",
+        "no3_n_mg_l", "no2_n_mg_l", "below_detection", "sparse_year", "likely_outlier",
     ]
     readings = readings_df[columns].copy()
     readings["station_code"] = pd.to_numeric(readings["station_code"], errors="coerce").astype("Int64")

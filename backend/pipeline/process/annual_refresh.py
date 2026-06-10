@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pymannkendall as mk
 
 
 def prepare_new_readings_for_insert(new_readings_df: pd.DataFrame) -> tuple[pd.DataFrame, list[int], list[int]]:
@@ -55,39 +54,3 @@ def build_annual_metrics_insert_df(annual_df: pd.DataFrame) -> pd.DataFrame:
         lambda x: float(x) if pd.notna(x) else None
     )
     return insert_df
-
-
-def build_trend_results_df(annual_data: pd.DataFrame) -> pd.DataFrame:
-    """Compute per-station Mann-Kendall trend results from annual metrics."""
-    results: list[dict[str, object]] = []
-
-    for station in annual_data["station_code"].unique():
-        series = annual_data[annual_data["station_code"] == station].sort_values("year")
-        valid = series[~series["sparse_year"]]
-
-        if len(valid) >= 8:
-            result = mk.original_test(valid["annual_mean_p_sol"].values)
-            direction = result.trend if result.trend in ("increasing", "decreasing") else "no trend"
-            results.append(
-                {
-                    "station_code": int(station),
-                    "trend_direction": direction,
-                    "p_value": float(result.p),
-                    "sens_slope": float(result.slope),
-                    "significant": bool(result.p < 0.05),
-                    "years_analysed": len(valid),
-                }
-            )
-        else:
-            results.append(
-                {
-                    "station_code": int(station),
-                    "trend_direction": "insufficient data",
-                    "p_value": None,
-                    "sens_slope": None,
-                    "significant": False,
-                    "years_analysed": len(valid),
-                }
-            )
-
-    return pd.DataFrame(results)

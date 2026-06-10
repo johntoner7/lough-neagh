@@ -1,47 +1,24 @@
-"""Compute derived metrics from raw readings."""
+"""Pure metric computation functions — no database I/O."""
 
 from __future__ import annotations
 
+import logging
+
+import numpy as np
 import pandas as pd
 import pymannkendall as mk
-from sqlalchemy import text
 
-from api.constants import WFD_THRESHOLD_MG_L
-
-
-def compute_annual_means(engine) -> pd.DataFrame:
-    """
-    For each station-year with at least 1 non-outlier reading:
-    - Compute mean P(SOL)
-    - Count readings
-    - Flag sparse years (reading_count < 8)
-    - Compute WFD compliance (annual_mean <= WFD_THRESHOLD_MG_L)
-    """
-    query = text("""
-        SELECT
-            station_code,
-            DATE_PART('year', reading_date)::INTEGER AS year,
-            AVG(p_sol_mg_l)                          AS annual_mean_p_sol,
-            COUNT(*)                                  AS reading_count,
-            COUNT(*) < 8                              AS sparse_year,
-            AVG(p_sol_mg_l) <= :threshold             AS wfd_compliant
-        FROM readings
-        WHERE p_sol_mg_l IS NOT NULL AND p_sol_mg_l > 0
-        GROUP BY station_code, year
-        ORDER BY station_code, year
-    """)
-    with engine.connect() as conn:
-        result = conn.execute(query, {"threshold": WFD_THRESHOLD_MG_L})
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
+logger = logging.getLogger(__name__)
 
 
 def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    For each station, compute centred 5-year rolling mean of annual_mean_p_sol.
-    Only computes where a complete ±2 year window with at least 3 non-sparse years exists.
+    """Compute centred 5-year rolling mean of annual_mean_p_sol per station.
+
+    A value is only written when the ±2-year window contains all 5 years and
+    at least 3 of them are non-sparse.
     """
     df = annual_df.copy()
-    df["rolling_mean_5yr"] = None
+    df["rolling_mean_5yr"] = np.nan
 
     for _, group in df.groupby("station_code"):
         group = group.sort_values("year")
@@ -58,18 +35,17 @@ def compute_rolling_means(annual_df: pd.DataFrame) -> pd.DataFrame:
 
             df.loc[idx, "rolling_mean_5yr"] = float(valid["annual_mean_p_sol"].mean())
 
+    computed = int(df["rolling_mean_5yr"].notna().sum())
+    logger.info("compute_rolling_means: %d/%d rows received a rolling mean", computed, len(df))
     return df
 
 
 def compute_trend_results(annual_data: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pure: compute Mann-Kendall trend results from a DataFrame of annual metrics.
+    """Compute Mann-Kendall trend results from a DataFrame of annual metrics.
 
-    Input DataFrame must have columns: station_code, year, annual_mean_p_sol, sparse_year.
-    Typically filtered to year >= 2010 before calling.
-
-    For each station with at least 8 non-sparse annual means, runs Mann-Kendall
-    and returns trend direction, p-value, and Sen slope.
+    Expects columns: station_code, year, annual_mean_p_sol, sparse_year.
+    Typically pre-filtered to year >= 2010 by the caller.
+    Requires at least 8 non-sparse years per station to produce a trend.
     """
     results: list[dict] = []
 
@@ -98,90 +74,11 @@ def compute_trend_results(annual_data: pd.DataFrame) -> pd.DataFrame:
                 "years_analysed": len(valid),
             })
 
-    return pd.DataFrame(results)
-
-
-def load_annual_data_for_trends(engine) -> pd.DataFrame:
-    """Load post-2010 annual metrics from the database for trend computation."""
-    query = text("""
-        SELECT station_code, year, annual_mean_p_sol, sparse_year
-        FROM annual_metrics
-        WHERE year >= 2010
-        ORDER BY station_code, year
-    """)
-    with engine.connect() as conn:
-        result = conn.execute(query)
-        return pd.DataFrame(result.fetchall(), columns=list(result.keys()))
-
-
-def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
-    """Atomically swap the annual_metrics table with freshly computed rows.
-
-    Writes to a staging table first, then replaces the live table in a single
-    transaction so the API never serves a partially-empty result set.
-    """
-    insert_df = annual_df[[
-        "station_code", "year", "annual_mean_p_sol", "reading_count",
-        "sparse_year", "wfd_compliant", "rolling_mean_5yr",
-    ]].copy()
-    insert_df["station_code"] = insert_df["station_code"].astype("Int64")
-    insert_df["year"] = insert_df["year"].astype("int64")
-    insert_df["annual_mean_p_sol"] = insert_df["annual_mean_p_sol"].apply(
-        lambda x: float(x) if pd.notna(x) else None
+    result_df = pd.DataFrame(results)
+    logger.info(
+        "compute_trend_results: %d stations — %d with trends, %d insufficient data",
+        len(result_df),
+        int((result_df["trend_direction"] != "insufficient data").sum()),
+        int((result_df["trend_direction"] == "insufficient data").sum()),
     )
-    insert_df["reading_count"] = insert_df["reading_count"].astype("Int64")
-    insert_df["rolling_mean_5yr"] = insert_df["rolling_mean_5yr"].apply(
-        lambda x: float(x) if pd.notna(x) else None
-    )
-
-    insert_df.to_sql(
-        "annual_metrics_staging", engine,
-        if_exists="replace", index=False, chunksize=1000, method="multi",
-    )
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY"))
-        conn.execute(text("""
-            INSERT INTO annual_metrics
-                (station_code, year, annual_mean_p_sol, reading_count,
-                 sparse_year, wfd_compliant, rolling_mean_5yr)
-            SELECT station_code, year, annual_mean_p_sol, reading_count,
-                   sparse_year, wfd_compliant, rolling_mean_5yr
-            FROM annual_metrics_staging
-        """))
-        conn.execute(text("DROP TABLE annual_metrics_staging"))
-
-
-def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
-    """Atomically swap the trend_results table with freshly computed rows.
-
-    Writes to a staging table first, then replaces the live table in a single
-    transaction so the API never serves a partially-empty result set.
-    """
-    insert_df = trend_df[[
-        "station_code", "trend_direction", "p_value", "sens_slope",
-        "significant", "years_analysed",
-    ]].copy()
-    insert_df["station_code"] = insert_df["station_code"].astype("int64")
-    insert_df["p_value"] = insert_df["p_value"].apply(
-        lambda x: float(x) if pd.notna(x) else None
-    )
-    insert_df["sens_slope"] = insert_df["sens_slope"].apply(
-        lambda x: float(x) if pd.notna(x) else None
-    )
-    insert_df["significant"] = insert_df["significant"].astype("bool")
-
-    insert_df.to_sql(
-        "trend_results_staging", engine,
-        if_exists="replace", index=False, method="multi",
-    )
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE trend_results"))
-        conn.execute(text("""
-            INSERT INTO trend_results
-                (station_code, trend_direction, p_value, sens_slope,
-                 significant, years_analysed)
-            SELECT station_code, trend_direction, p_value, sens_slope,
-                   significant, years_analysed
-            FROM trend_results_staging
-        """))
-        conn.execute(text("DROP TABLE trend_results_staging"))
+    return result_df
