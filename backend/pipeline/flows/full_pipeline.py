@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
+import logging
 import os
+import sys
 from pathlib import Path
 
 import geopandas as gpd
@@ -24,6 +27,8 @@ from backend.pipeline.process.metrics import (
     insert_trend_results,
     load_annual_data_for_trends,
 )
+
+logger = logging.getLogger(__name__)
 
 _DATA_RAW = Path(__file__).parents[3] / "data" / "raw"
 
@@ -51,13 +56,13 @@ def persist_data(
 ) -> dict[str, int]:
     engine = create_engine(database_url)
 
-    print("    inserting waterbodies...", flush=True)
+    logger.info("Inserting waterbodies...")
     insert_waterbodies(waterbodies, engine)
-    print("    inserting lakes...", flush=True)
+    logger.info("Inserting lakes...")
     insert_lakes(lakes, engine)
-    print("    inserting stations...", flush=True)
+    logger.info("Inserting stations...")
     insert_stations(enriched, engine)
-    print("    inserting readings...", flush=True)
+    logger.info("Inserting readings...")
     insert_readings(readings_df, engine)
 
     return {
@@ -101,44 +106,55 @@ def ingest_farms(database_url: str) -> dict[str, int]:
 
 def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
     """Ingest all sources and compute derived metrics."""
-    if database_url is None:
-        database_url = (
-            os.environ.get("DATABASE_PUBLIC_URL")
-            or os.environ.get("DATABASE_URL")
-            or "postgresql://user:password@localhost:5433/phosphorus_db"
+    url = database_url or os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL environment variable is required (or pass --database-url)"
         )
 
-    print("  Loading sources...", flush=True)
+    logger.info("Loading sources...")
     waterbodies, lakes, enriched, readings_df = load_sources()
-    print(
-        f"  Sources loaded: {len(waterbodies)} waterbodies, "
-        f"{len(enriched)} stations, {len(readings_df)} readings",
-        flush=True,
+    logger.info(
+        "Sources loaded: %d waterbodies, %d stations, %d readings",
+        len(waterbodies), len(enriched), len(readings_df),
     )
 
-    print("  Clearing geojson cache...", flush=True)
-    _cache_engine = create_engine(database_url)
-    with _cache_engine.begin() as conn:
+    logger.info("Clearing GeoJSON cache...")
+    with create_engine(url).begin() as conn:
         conn.execute(text("TRUNCATE TABLE geojson_cache;"))
 
-    print("  Persisting data...", flush=True)
-    persist_summary = persist_data(waterbodies, lakes, enriched, readings_df, database_url)
-    print("  Data persisted", flush=True)
+    logger.info("Persisting data...")
+    persist_summary = persist_data(waterbodies, lakes, enriched, readings_df, url)
+    logger.info("Data persisted.")
 
-    print("  Computing metrics...", flush=True)
-    metrics_summary = compute_metrics(database_url)
-    print("  Metrics computed", flush=True)
+    logger.info("Computing metrics...")
+    metrics_summary = compute_metrics(url)
+    logger.info("Metrics computed.")
 
-    print("  Ingesting river segments...", flush=True)
-    seg_summary = ingest_river_segments(enriched, database_url)
-    print("  River segments ingested", flush=True)
+    logger.info("Ingesting river segments...")
+    seg_summary = ingest_river_segments(enriched, url)
+    logger.info("River segments ingested.")
 
-    print("  Ingesting farm census...", flush=True)
-    farm_summary = ingest_farms(database_url)
-    print("  Farm census ingested", flush=True)
+    logger.info("Ingesting farm census...")
+    farm_summary = ingest_farms(url)
+    logger.info("Farm census ingested.")
 
     return {**persist_summary, **metrics_summary, **seg_summary, **farm_summary}
 
 
 if __name__ == "__main__":
-    print(run_full_pipeline())
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+
+    parser = argparse.ArgumentParser(description="Run the full phosphorus data pipeline.")
+    parser.add_argument(
+        "--database-url",
+        default=None,
+        help="PostgreSQL connection string (defaults to DATABASE_URL env var)",
+    )
+    args = parser.parse_args()
+
+    result = run_full_pipeline(database_url=args.database_url)
+    print("\nPipeline complete:")
+    for k, v in result.items():
+        print(f"  {k}: {v}")
+    sys.exit(0)

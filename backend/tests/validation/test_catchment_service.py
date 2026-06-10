@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from backend.api.models import StationProperties
-from backend.api.services.catchments import summarize_catchment_stations
+from api.models import StationProperties
+from api.services.catchments import summarize_catchment_stations
 
 
 def test_summarize_catchment_stations_computes_means_and_threshold_share() -> None:

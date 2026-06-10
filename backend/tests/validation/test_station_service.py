@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.api.services.stations import build_geojson_cache_key, parse_bbox_query
+from api.services.stations import build_geojson_cache_key, parse_bbox_query
 
 
 def test_parse_bbox_query_returns_float_tuple() -> None:

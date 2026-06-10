@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Point, LineString, MultiLineString, MultiPolygon
 from shapely.ops import linemerge
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 
 def insert_stations(enriched_stations_gdf: gpd.GeoDataFrame, engine) -> None:
@@ -123,12 +127,16 @@ def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
     if "rseg_cd" in gdf.columns:
         dup_count = int(gdf["rseg_cd"].duplicated(keep=False).sum())
         if dup_count:
-            print(f"Warning: {dup_count} duplicate rseg_cd values found — dropping duplicates before insert")
+            logger.warning(
+                "%d duplicate rseg_cd values found — dropping duplicates before insert", dup_count
+            )
             gdf = gdf.drop_duplicates(subset=["rseg_cd"])
 
     multi_count = int((gdf["geom"].geom_type == "MultiLineString").sum())
     if multi_count:
-        print(f"Warning: {multi_count} MultiLineString geometries found — converting to LineString before insert")
+        logger.warning(
+            "%d MultiLineString geometries found — converting to LineString before insert", multi_count
+        )
     gdf["geom"] = gdf["geom"].apply(lambda g: _to_linestring(g))
 
     with engine.begin() as conn:

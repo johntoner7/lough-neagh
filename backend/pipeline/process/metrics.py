@@ -6,7 +6,7 @@ import pandas as pd
 import pymannkendall as mk
 from sqlalchemy import text
 
-from backend.api.constants import WFD_THRESHOLD_MG_L
+from api.constants import WFD_THRESHOLD_MG_L
 
 
 def compute_annual_means(engine) -> pd.DataFrame:
@@ -115,7 +115,11 @@ def load_annual_data_for_trends(engine) -> pd.DataFrame:
 
 
 def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
-    """Truncate and reload the annual_metrics table."""
+    """Atomically swap the annual_metrics table with freshly computed rows.
+
+    Writes to a staging table first, then replaces the live table in a single
+    transaction so the API never serves a partially-empty result set.
+    """
     insert_df = annual_df[[
         "station_code", "year", "annual_mean_p_sol", "reading_count",
         "sparse_year", "wfd_compliant", "rolling_mean_5yr",
@@ -130,17 +134,29 @@ def insert_annual_metrics(annual_df: pd.DataFrame, engine) -> None:
         lambda x: float(x) if pd.notna(x) else None
     )
 
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY;"))
-
     insert_df.to_sql(
-        "annual_metrics", engine,
-        if_exists="append", index=False, chunksize=1000, method="multi",
+        "annual_metrics_staging", engine,
+        if_exists="replace", index=False, chunksize=1000, method="multi",
     )
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE annual_metrics RESTART IDENTITY"))
+        conn.execute(text("""
+            INSERT INTO annual_metrics
+                (station_code, year, annual_mean_p_sol, reading_count,
+                 sparse_year, wfd_compliant, rolling_mean_5yr)
+            SELECT station_code, year, annual_mean_p_sol, reading_count,
+                   sparse_year, wfd_compliant, rolling_mean_5yr
+            FROM annual_metrics_staging
+        """))
+        conn.execute(text("DROP TABLE annual_metrics_staging"))
 
 
 def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
-    """Truncate and reload the trend_results table."""
+    """Atomically swap the trend_results table with freshly computed rows.
+
+    Writes to a staging table first, then replaces the live table in a single
+    transaction so the API never serves a partially-empty result set.
+    """
     insert_df = trend_df[[
         "station_code", "trend_direction", "p_value", "sens_slope",
         "significant", "years_analysed",
@@ -154,10 +170,18 @@ def insert_trend_results(trend_df: pd.DataFrame, engine) -> None:
     )
     insert_df["significant"] = insert_df["significant"].astype("bool")
 
-    with engine.begin() as conn:
-        conn.execute(text("TRUNCATE TABLE trend_results RESTART IDENTITY;"))
-
     insert_df.to_sql(
-        "trend_results", engine,
-        if_exists="append", index=False, method="multi",
+        "trend_results_staging", engine,
+        if_exists="replace", index=False, method="multi",
     )
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE trend_results"))
+        conn.execute(text("""
+            INSERT INTO trend_results
+                (station_code, trend_direction, p_value, sens_slope,
+                 significant, years_analysed)
+            SELECT station_code, trend_direction, p_value, sens_slope,
+                   significant, years_analysed
+            FROM trend_results_staging
+        """))
+        conn.execute(text("DROP TABLE trend_results_staging"))

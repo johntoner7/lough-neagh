@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from backend.api.models import StationTimeSeries, TimeSeriesPoint
+from api.models import StationTimeSeries, TimeSeriesPoint
 
 
 def build_station_timeseries_response(

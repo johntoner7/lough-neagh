@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.api.services.station_timeseries import build_station_timeseries_response
+from api.services.station_timeseries import build_station_timeseries_response
 
 
 def test_build_station_timeseries_response_maps_rows_to_models() -> None:

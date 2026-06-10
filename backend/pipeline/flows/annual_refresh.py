@@ -22,7 +22,7 @@ from typing import Any
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-from backend.api.constants import WFD_THRESHOLD_MG_L
+from api.constants import WFD_THRESHOLD_MG_L
 from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.process.annual_refresh import (
     build_annual_metrics_insert_df,

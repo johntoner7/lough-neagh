@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.api.models import StationProperties
+from api.models import StationProperties
 
 
 def summarize_catchment_stations(stations: list[StationProperties]) -> tuple[float | None, float | None]:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -9,6 +10,8 @@ import geopandas as gpd
 import pandas as pd
 from shapely.geometry import MultiPolygon
 from sqlalchemy import create_engine, text
+
+logger = logging.getLogger(__name__)
 
 _DATA_ROOT = Path(__file__).parents[3] / "data" / "raw" / "farms"
 
@@ -92,25 +95,25 @@ def load_farm_census() -> gpd.GeoDataFrame:
 
 def insert_farm_census(engine) -> int:
     """Truncate and reload farm_census_wards table. Returns row count inserted."""
-    print("    loading farm census data...", flush=True)
+    logger.info("Loading farm census data")
     gdf = load_farm_census()
-    print(f"    loaded {len(gdf)} ward-year rows; normalising geometries...", flush=True)
+    logger.info("Loaded %d ward-year rows; normalising geometries", len(gdf))
     gdf["geometry"] = gdf["geometry"].apply(
         lambda g: g if g is None or isinstance(g, MultiPolygon) else MultiPolygon([g])
     )
-    print("    truncating farm_census_wards...", flush=True)
+    logger.info("Truncating farm_census_wards")
     with engine.begin() as conn:
         conn.execute(text("TRUNCATE TABLE farm_census_wards RESTART IDENTITY;"))
-    print(f"    writing {len(gdf)} rows to farm_census_wards...", flush=True)
+    logger.info("Writing %d rows to farm_census_wards", len(gdf))
     gdf.to_postgis("farm_census_wards", engine, if_exists="append", index=False, chunksize=500)
-    print("    populating geom_simplified...", flush=True)
+    logger.info("Populating geom_simplified")
     with engine.begin() as conn:
         conn.execute(text(
             "UPDATE farm_census_wards"
             " SET geom_simplified = ST_SimplifyPreserveTopology(geometry, 0.001)"
             " WHERE geometry IS NOT NULL;"
         ))
-    print("    farm_census_wards write complete", flush=True)
+    logger.info("farm_census_wards write complete")
     return len(gdf)
 
 
@@ -119,12 +122,16 @@ def backfill_farm_census_catchments(database_url: str | None = None) -> int:
 
     The catchment polygons are derived from station locations, so this works even when
     there is no standalone catchment boundary table in the database.
+
+    Requires the catchment_name column to already exist on farm_census_wards
+    (created by scripts/create_tables.py).
     """
-    url = database_url or os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5433/phosphorus_db")
+    url = database_url or os.environ.get("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL environment variable is required")
     engine = create_engine(url)
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE farm_census_wards ADD COLUMN IF NOT EXISTS catchment_name TEXT;"))
-        print("    backfilling catchment names (spatial join on unique wards)...", flush=True)
+        logger.info("Backfilling catchment names (spatial join on unique wards)")
         conn.execute(text(
             """
             WITH catchment_boundaries AS (
@@ -165,7 +172,7 @@ def backfill_farm_census_catchments(database_url: str | None = None) -> int:
               AND fw.catchment_name IS NULL;
             """
         ))
-        print("    catchment backfill query complete; counting results...", flush=True)
         cur = conn.execute(text("SELECT COUNT(*) FROM farm_census_wards WHERE catchment_name IS NOT NULL;"))
         count = cur.scalar() or 0
+    logger.info("Catchment backfill complete: %d ward rows stamped", count)
     return int(count)

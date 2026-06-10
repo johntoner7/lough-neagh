@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.api.services.farms import build_farm_cache_key, clamp_farm_year
+from api.services.farms import build_farm_cache_key, clamp_farm_year
 
 
 def test_clamp_farm_year_limits_lower_bound() -> None:
