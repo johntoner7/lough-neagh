@@ -20,7 +20,7 @@ export const UI_TEXT = {
     dropdowns: 
       {    
         sedimentCallout: 'Even if every river reached compliance today, AFBI scientists estimate it would take around 40 years for Lough Neagh to recover. The phosphorus accumulated over decades is still in the sediment.',
-        phosphorusSources: 'Agriculture contributes 62% of the phosphorus entering NI\'s rivers. The main pathways are slurry spreading on saturated land, fertiliser runoff after heavy rainfall, and cattle with direct access to riverbanks. Sewage treatment investment in the 1980s and 90s produced a genuine and measurable improvement, cutting phosphorus loads significantly across the network. Agricultural inputs never followed the same trajectory, and there has been no equivalent policy intervention to address them. The Blackwater catchment, which is among the most intensively farmed in Northern Ireland, had 94% of its monitored stations above the legal phosphorus limit in 2024.',
+        phosphorusSources: 'Agriculture contributes 62% of the phosphorus entering NI\'s rivers. The main pathways are slurry spreading on saturated land, fertiliser runoff after heavy rainfall, and cattle with direct access to riverbanks. Sewage treatment investment in the 1980s and 90s produced a genuine and measurable improvement, cutting phosphorus loads significantly across the network. Agricultural inputs never followed the same trajectory, and there has been no equivalent policy intervention to address them. Sewage has not gone away, though: NI Water models roughly 3.8 million cubic metres of untreated storm overflow discharge into the Lough Neagh catchments each year, and the Blackwater — among the most intensively farmed catchments in Northern Ireland, with 94% of its monitored stations above the legal phosphorus limit in 2024 — also ranks second for modelled spill volume. Turn on the storm overflow layer at 2024 to see where those discharges sit relative to the farmed land.',
         possibleActions: 'Riparian buffer strips are unfertilised grass margins between fields and watercourses, which have been suggested to reduce phosphorus runoff by 30 to 50% when maintained. Tighter slurry management rules would reduce the volume of phosphorus reaching rivers from runoff. Reducing cattle dentisty would also cut phosphorus inputs, as well as delivering a range of other environmental benefits. However, none of these measures would address the legacy phosphorus in Lough Neagh\'s sediment, which is the main driver of algae blooms today.',
       },
     sections: {
@@ -40,6 +40,24 @@ export const UI_TEXT = {
       hide: 'Hide layer',
       loading: 'Loading farm census…',
       legendNote: 'Syncs to timeline (2015–2024). Hover a ward for details. Areas with higher cattle density tend to have higher phosphorus levels.',
+    },
+    overflowLayer: {
+      title: 'Storm overflows (NI Water)',
+      show: 'Show layer',
+      hide: 'Hide layer',
+      loading: 'Loading storm overflows…',
+      disabledHint: '2025 snapshot — available at 2024',
+      unavailable: 'Storm overflow layer unavailable — data could not be loaded',
+      notModelled: 'Not yet modelled by NI Water',
+      approximateLocation: 'Location approximate (asset, not outfall)',
+      spillsUnit: 'spills/yr',
+      volumeUnit: 'm³/yr',
+      legendTitle: 'Storm overflows (points)',
+      legendUnsatisfactory: 'Unsatisfactory (spills modelled)',
+      legendSatisfactory: 'Satisfactory',
+      legendUnmodelled: 'Not yet modelled',
+      legendSizeNote: 'Circle size = predicted spills per year',
+      legendFootnote: 'NI Water modelled estimates, Nov 2025 — not measured. Around half of all assets have no estimate; those are drawn as hollow rings, which does not mean they never spill.',
     },
     annotations: {
       nap: 'Nitrates Action Programme introduced. Progress had already stalled.',

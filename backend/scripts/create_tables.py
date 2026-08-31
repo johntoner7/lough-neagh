@@ -141,6 +141,26 @@ CREATE INDEX IF NOT EXISTS idx_river_segments_geom ON river_segments USING GIST(
 CREATE INDEX IF NOT EXISTS idx_river_segments_geom_4326 ON river_segments USING GIST(geom_4326);
 CREATE INDEX IF NOT EXISTS idx_river_segments_geom_simplified ON river_segments USING GIST(geom_simplified);
 CREATE INDEX IF NOT EXISTS idx_river_segments_station ON river_segments(nearest_station_code);
+
+CREATE TABLE IF NOT EXISTS storm_overflows (
+    car_id                   TEXT PRIMARY KEY,
+    name                     TEXT NOT NULL,
+    spill_frequency          FLOAT,
+    spill_volume_m3          FLOAT,
+    classification           TEXT,
+    modelled                 BOOLEAN NOT NULL DEFAULT FALSE,
+    monitored                BOOLEAN NOT NULL DEFAULT FALSE,
+    receiving_waterbody_id   TEXT,
+    receiving_waterbody_name TEXT,
+    local_management_area    TEXT,
+    catchment_name           TEXT,
+    coord_is_discharge_point BOOLEAN NOT NULL DEFAULT FALSE,
+    geom                     GEOMETRY(POINT, 29902),
+    geom_4326                GEOMETRY(POINT, 4326)
+);
+
+CREATE INDEX IF NOT EXISTS idx_storm_overflows_geom_4326 ON storm_overflows USING GIST(geom_4326);
+CREATE INDEX IF NOT EXISTS idx_storm_overflows_catchment ON storm_overflows(catchment_name);
 """
 
 

@@ -13,6 +13,7 @@
 - Animated timeline stepping through 1990–2024, colour-coded by WFD compliance threshold
 - Per-catchment filter to isolate individual river systems
 - Cattle density layer (2015–2024 farm census data) overlaid on the map
+- Storm overflow layer (NI Water modelled spills, 2025 snapshot) shown at 2024, sized by predicted spills per year
 - Click any station to open a detail drawer with a 35-year phosphorus chart, 5-year rolling mean, and Mann-Kendall trend classification
 - Sparkline panel for the six key Lough Neagh tributaries
 
@@ -52,19 +53,35 @@ MAPBOX_TOKEN=<your_token>
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-Start the PostGIS database:
+Start the PostGIS database (port 5433, matching `DATABASE_URL`):
 
 ```bash
-docker compose -f backend/docker-compose.yml up db
+docker compose -f backend/docker-compose.yml up -d db
 ```
 
-Then seed it:
+Create the PostGIS extensions and the schema:
 
 ```bash
 cd backend
-uv run python scripts/create_tables.py
-uv run python scripts/seed_db.py
+uv run python -m scripts.init_db
+uv run python -m scripts.create_tables
 ```
+
+Then load the data. The pipeline reads `data/raw/` by relative path, so it must
+be run **from the repo root**, not from `backend/`:
+
+```bash
+cd ..
+backend/.venv/bin/python -m backend.scripts.run_pipeline --dry-run
+backend/.venv/bin/python -m backend.scripts.run_pipeline
+```
+
+The dry run validates every source file and the database connection without
+writing anything; drop the flag to load for real. A full run takes several
+minutes — it ingests 35 years of readings and computes Mann-Kendall trends per
+station. Note that `data/raw/` is git-ignored: the source files listed under
+[Data Sources](#data-sources) have to be present locally before the pipeline
+will pass its pre-flight checks.
 
 Start the API on port 8000:
 
@@ -80,7 +97,21 @@ cd frontend
 npm run dev
 ```
 
-## Data Source & Methodology
+## Data Sources
+
+| Dataset | Source | Period |
+|---|---|---|
+| River nutrient readings | DAERA FOI 26-57 | 1990–2024 |
+| WFD monitoring sites, water bodies, lake classifications | DAERA / UK EA | 2016, 2024 |
+| Farm census (ward level) + OSNI ward boundaries | NISRA, Ordnance Survey NI | 2015–2024 |
+| Storm overflow modelled spills | NI Water Corporate Asset Register | Nov 2025 snapshot |
+
+The storm overflow figures are modelled rather than measured, and NI Water has
+only modelled the most densely populated areas — around half of the registered
+assets carry no estimate at all. Those are drawn as hollow rings on the map,
+which means "no published estimate", not "never spills".
+
+## Methodology
 
 Data comes from DAERA Freedom of Information releases (reference 26-57). Concentrations are *measured*, not estimated loads — they reflect what the river contained at the sampling point, not how much phosphorus entered the catchment upstream. Annual means are computed from raw readings; 5-year rolling means smooth short-term noise. Mann-Kendall tests detect monotonic trends.
 

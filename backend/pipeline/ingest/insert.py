@@ -149,3 +149,16 @@ def insert_river_segments(segments_gdf: gpd.GeoDataFrame, engine) -> None:
         conn.execute(text(
             "UPDATE river_segments SET geom_simplified = ST_SimplifyPreserveTopology(geom_4326, 0.001) WHERE geom_4326 IS NOT NULL;"
         ))
+
+
+def insert_storm_overflows(overflows_gdf: gpd.GeoDataFrame, engine) -> None:
+    """Truncate and reload the storm_overflows table."""
+    gdf = overflows_gdf.rename_geometry("geom")
+
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE storm_overflows;"))
+    gdf.to_postgis("storm_overflows", engine, if_exists="append", index=False, chunksize=500)
+    with engine.begin() as conn:
+        conn.execute(text(
+            "UPDATE storm_overflows SET geom_4326 = ST_Transform(geom, 4326) WHERE geom IS NOT NULL;"
+        ))

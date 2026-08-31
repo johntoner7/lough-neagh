@@ -73,6 +73,15 @@ export default function MethodologyPage() {
                   <td>2012</td>
                   <td>Do not align with hydrological catchments</td>
                 </tr>
+                <tr>
+                  <td>Storm overflow spills</td>
+                  <td>NI Water Corporate Asset Register</td>
+                  <td>Nov 2025 snapshot</td>
+                  <td>
+                    Modelled, not measured. 2,433 assets, of which 1,232 have no estimate —
+                    modelling covers only the most densely populated areas
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -141,8 +150,17 @@ export default function MethodologyPage() {
             <div className="methodology-cannot-item">
               <h3>The relative contribution of sewage versus agriculture</h3>
               <p>
-                Both are phosphorus sources. The tool cannot disaggregate them at any station, and
-                no population density comparison has been carried out in this release.
+                Both are phosphorus sources, and the tool now shows where each pressure sits — cattle
+                density by ward, and NI Water storm overflows by asset. It still cannot disaggregate
+                them at any station. Spill frequency and volume are not phosphorus load: without the
+                concentration of what is discharged, volume alone cannot be converted into a share of
+                the phosphorus in a river.
+              </p>
+              <p>
+                The spill figures are also modelled rather than measured, and around half of NI
+                Water's registered overflow assets have not been modelled at all. An asset drawn as a
+                hollow ring is one with no published estimate — not one that never spills. Neither
+                layer should be read as attribution.
               </p>
             </div>
             <div className="methodology-cannot-item">

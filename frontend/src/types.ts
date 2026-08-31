@@ -5,6 +5,10 @@ export type {
   StationCollection,
   TimeSeriesPoint,
   StationTimeSeries,
+  StormOverflowProperties,
+  StormOverflowFeature,
+  StormOverflowCollection,
+  StormOverflowSummary,
 } from './schemas'
 
 // Types not derived from API responses — kept here

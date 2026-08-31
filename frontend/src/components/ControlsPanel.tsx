@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { YEAR_MAX, YEAR_MIN } from '../constants'
+import { STORM_OVERFLOW_SNAPSHOT_YEAR, YEAR_MAX, YEAR_MIN } from '../constants'
 import { getEraCaption } from '../eraCaptions'
 import { UI_TEXT } from '../uiText'
 
@@ -12,9 +12,11 @@ interface Props {
   catchment: string
   catchments: string[]
   showFarmLayer: boolean
+  showOverflowLayer: boolean
   onYearChange: (year: number) => void
   onCatchmentChange: (catchment: string) => void
   onToggleFarmLayer: () => void
+  onToggleOverflowLayer: () => void
 }
 
 export default function ControlsPanel({
@@ -23,11 +25,17 @@ export default function ControlsPanel({
   catchment,
   catchments,
   showFarmLayer,
+  showOverflowLayer,
   onYearChange,
   onCatchmentChange,
   onToggleFarmLayer,
+  onToggleOverflowLayer,
 }: Props) {
   const isBaselineYear = year === YEAR_MIN
+  // The spill data is a single 2025 snapshot, so the layer only means anything
+  // at the timeline's present-day end. Disabled and explained elsewhere, rather
+  // than silently inert.
+  const overflowAvailable = year === STORM_OVERFLOW_SNAPSHOT_YEAR
 
   const narration = getEraCaption(year)
   const [openPanel, setOpenPanel] = useState<string | null>('summary')
@@ -58,6 +66,22 @@ export default function ControlsPanel({
             style={{ width: '100%' }}
           >
             {showFarmLayer ? UI_TEXT.sidebar.farmLayer.hide : UI_TEXT.sidebar.farmLayer.show}
+          </button>
+        </div>
+
+        <div className="cp-control-item">
+          <div className="cp-control-label">{UI_TEXT.sidebar.overflowLayer.title}</div>
+          <button
+            className={`station-toggle-btn${showOverflowLayer && overflowAvailable ? ' active' : ''}`}
+            onClick={onToggleOverflowLayer}
+            type="button"
+            disabled={!overflowAvailable}
+            title={overflowAvailable ? undefined : UI_TEXT.sidebar.overflowLayer.disabledHint}
+            style={{ width: '100%' }}
+          >
+            {overflowAvailable
+              ? (showOverflowLayer ? UI_TEXT.sidebar.overflowLayer.hide : UI_TEXT.sidebar.overflowLayer.show)
+              : UI_TEXT.sidebar.overflowLayer.disabledHint}
           </button>
         </div>
 

@@ -38,6 +38,7 @@ REQUIRED_FILES = {
 REQUIRED_DIR_GLOBS = {
     "WFD monitoring sites": (DATA_ROOT / "wfd_sites", "*.geojson"),
     "Farm census CSV":      (DATA_ROOT / "farms", "FCWARD.*.csv"),
+    "Storm overflows":      (DATA_ROOT / "storm_overflows", "*.xlsx"),
 }
 
 
@@ -73,7 +74,7 @@ def check_db(database_url: str) -> bool:
 
 def current_row_counts(database_url: str) -> dict[str, int]:
     tables = ["stations", "readings", "annual_metrics", "trend_results",
-              "waterbodies", "lakes", "farm_census_wards"]
+              "waterbodies", "lakes", "farm_census_wards", "storm_overflows"]
     engine = create_engine(database_url)
     counts = {}
     for table in tables:

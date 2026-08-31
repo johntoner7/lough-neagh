@@ -6,7 +6,7 @@ import CinematicCaption from './components/CinematicCaption'
 import ControlsPanel from './components/ControlsPanel'
 import MapContainer from './components/MapContainer'
 import StationDetailDrawer from './components/StationDetailDrawer'
-import { YEAR_MIN, YEAR_MAX } from './constants'
+import { STORM_OVERFLOW_SNAPSHOT_YEAR, YEAR_MIN, YEAR_MAX } from './constants'
 import { useAppInit } from './hooks/useAppInit'
 import { useStationsFetch } from './hooks/useStationsFetch'
 import { useSummaryStats } from './hooks/useSummaryStats'
@@ -28,12 +28,18 @@ function getInitialCatchment(): string {
   return new URLSearchParams(window.location.search).get('catchment') ?? ''
 }
 
+function getInitialOverflowLayer(): boolean {
+  if (typeof window === 'undefined') {return false}
+  return new URLSearchParams(window.location.search).get('overflow') === '1'
+}
+
 export default function App() {
   const { token, catchments, timeSeriesByCode, setTimeSeriesByCode, error } = useAppInit()
 
   const [year, setYear] = useState(getInitialYear)
   const [catchment, setCatchment] = useState(getInitialCatchment)
   const [showFarmLayer, setShowFarmLayer] = useState(true)
+  const [showOverflowLayer, setShowOverflowLayer] = useState(getInitialOverflowLayer)
   const [isPlaying, setIsPlaying] = useState(false)
   const [selectedFeature, setSelectedFeature] = useState<StationFeature | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -66,10 +72,13 @@ export default function App() {
     if (catchment) {params.set('catchment', catchment)}
     else {params.delete('catchment')}
 
+    if (showOverflowLayer) {params.set('overflow', '1')}
+    else {params.delete('overflow')}
+
     const nextSearch = params.toString()
     const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`
     window.history.replaceState({}, '', nextUrl)
-  }, [year, catchment])
+  }, [year, catchment, showOverflowLayer])
 
   const handleTogglePlay = useCallback(() => {
     setIsPlaying(p => {
@@ -83,6 +92,13 @@ export default function App() {
   }, [year])
 
   const handleToggleFarmLayer = useCallback(() => setShowFarmLayer(v => !v), [])
+
+  const handleToggleOverflowLayer = useCallback(() => {
+    // The toggle is disabled away from the snapshot year, but a stale URL
+    // parameter could still ask for it.
+    if (year !== STORM_OVERFLOW_SNAPSHOT_YEAR) {return}
+    setShowOverflowLayer(v => !v)
+  }, [year])
 
   const handleStationClick = useCallback((feature: StationFeature) => {
     setSelectedFeature(feature)
@@ -161,6 +177,7 @@ export default function App() {
                 keyStationsData={keyStationsData}
                 selectedFeature={selectedFeature}
                 showFarmLayer={showFarmLayer}
+                showOverflowLayer={showOverflowLayer}
                 onStationClick={isPlaying ? undefined : handleStationClick}
               />
 
@@ -191,9 +208,11 @@ export default function App() {
             catchment={catchment}
             catchments={catchments}
             showFarmLayer={showFarmLayer}
+            showOverflowLayer={showOverflowLayer}
             onYearChange={handleYearChange}
             onCatchmentChange={handleCatchmentChange}
             onToggleFarmLayer={handleToggleFarmLayer}
+            onToggleOverflowLayer={handleToggleOverflowLayer}
           />
         </div>
       </section>

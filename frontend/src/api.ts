@@ -3,9 +3,16 @@ import {
   ConfigSchema,
   StationCollectionSchema,
   StationTimeSeriesSchema,
+  StormOverflowCollectionSchema,
+  StormOverflowSummarySchema,
 } from './schemas'
 
-import type { StationCollection, StationTimeSeries } from './types'
+import type {
+  StationCollection,
+  StationTimeSeries,
+  StormOverflowCollection,
+  StormOverflowSummary,
+} from './types'
 
 const DEFAULT_API_BASE = 'http://localhost:8000'
 
@@ -46,4 +53,28 @@ export async function fetchTimeSeries(
   const res = await fetch(`${API_BASE}/stations/${stationCode}/timeseries`, { signal })
   if (!res.ok) {throw new Error(`Timeseries fetch failed: ${res.status}`)}
   return StationTimeSeriesSchema.parse(await res.json())
+}
+
+export async function fetchStormOverflows(
+  catchment: string,
+  signal?: AbortSignal,
+): Promise<StormOverflowCollection> {
+  const params = new URLSearchParams()
+  if (catchment) {params.append('catchment', catchment)}
+  const query = params.toString()
+  const res = await fetch(`${API_BASE}/storm-overflows/geojson${query ? `?${query}` : ''}`, { signal })
+  if (!res.ok) {throw new Error(`Storm overflows fetch failed: ${res.status}`)}
+  return StormOverflowCollectionSchema.parse(await res.json())
+}
+
+export async function fetchStormOverflowSummary(
+  catchment: string,
+  signal?: AbortSignal,
+): Promise<StormOverflowSummary> {
+  const params = new URLSearchParams()
+  if (catchment) {params.append('catchment', catchment)}
+  const query = params.toString()
+  const res = await fetch(`${API_BASE}/storm-overflows/summary${query ? `?${query}` : ''}`, { signal })
+  if (!res.ok) {throw new Error(`Storm overflow summary fetch failed: ${res.status}`)}
+  return StormOverflowSummarySchema.parse(await res.json())
 }

@@ -385,3 +385,94 @@ class TestRiverSegmentsGeoJSON:
         full = client.get("/river-segments/geojson", params={"year": RECENT_YEAR}).json()["features"]
         filtered = client.get("/river-segments/geojson", params={"year": RECENT_YEAR, "catchment": KNOWN_CATCHMENT}).json()["features"]
         assert 0 < len(filtered) < len(full)
+
+
+# ---------------------------------------------------------------------------
+# /storm-overflows/geojson
+# ---------------------------------------------------------------------------
+
+class TestStormOverflowsGeoJSON:
+    def test_returns_feature_collection(self, client: TestClient) -> None:
+        r = client.get("/storm-overflows/geojson")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["type"] == "FeatureCollection"
+        assert len(body["features"]) > 0
+
+    def test_metadata_reports_modelled_coverage(self, client: TestClient) -> None:
+        metadata = client.get("/storm-overflows/geojson").json()["metadata"]
+        assert metadata["asset_count"] > 0
+        # Only densely populated areas have been modelled — coverage is partial
+        # by construction, and the client relies on that being visible.
+        assert 0 < metadata["modelled_count"] < metadata["asset_count"]
+        assert "2025" in metadata["snapshot"]
+
+    def test_feature_properties_schema(self, client: TestClient) -> None:
+        features = client.get("/storm-overflows/geojson").json()["features"]
+        for f in features[:5]:
+            props = f["properties"]
+            assert "car_id" in props
+            assert "modelled" in props
+            assert "spill_frequency" in props
+            assert "coord_is_discharge_point" in props
+
+    def test_unmodelled_assets_have_null_spills_not_zero(self, client: TestClient) -> None:
+        """"Not yet modelled" must never be served as "zero spills"."""
+        features = client.get("/storm-overflows/geojson").json()["features"]
+        unmodelled = [f for f in features if not f["properties"]["modelled"]]
+        assert len(unmodelled) > 0
+        for f in unmodelled:
+            assert f["properties"]["spill_frequency"] is None
+            assert f["properties"]["spill_volume_m3"] is None
+
+    def test_modelled_assets_carry_a_frequency(self, client: TestClient) -> None:
+        features = client.get("/storm-overflows/geojson").json()["features"]
+        modelled = [f for f in features if f["properties"]["modelled"]]
+        assert len(modelled) > 0
+        assert all(f["properties"]["spill_frequency"] is not None for f in modelled)
+
+    def test_all_features_have_geometry(self, client: TestClient) -> None:
+        features = client.get("/storm-overflows/geojson").json()["features"]
+        assert all(f["geometry"] is not None for f in features)
+
+    def test_catchment_filter_reduces_results(self, client: TestClient) -> None:
+        full = client.get("/storm-overflows/geojson").json()["features"]
+        filtered = client.get(
+            "/storm-overflows/geojson", params={"catchment": KNOWN_CATCHMENT}
+        ).json()["features"]
+        assert 0 < len(filtered) < len(full)
+        assert all(
+            f["properties"]["catchment_name"] == KNOWN_CATCHMENT for f in filtered
+        )
+
+    def test_unknown_catchment_returns_empty(self, client: TestClient) -> None:
+        r = client.get("/storm-overflows/geojson", params={"catchment": "Nowhere"})
+        assert r.status_code == 200
+        assert r.json()["features"] == []
+
+    def test_cache_header(self, client: TestClient) -> None:
+        r = client.get("/storm-overflows/geojson")
+        assert "public" in r.headers.get("cache-control", "")
+
+
+# ---------------------------------------------------------------------------
+# /storm-overflows/summary
+# ---------------------------------------------------------------------------
+
+class TestStormOverflowSummary:
+    def test_totals_present(self, client: TestClient) -> None:
+        r = client.get("/storm-overflows/summary")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["asset_count"] > body["modelled_count"] > 0
+        assert body["total_spills"] > 0
+        assert body["total_volume_m3"] > 0
+
+    def test_catchment_totals_are_smaller(self, client: TestClient) -> None:
+        full = client.get("/storm-overflows/summary").json()
+        filtered = client.get(
+            "/storm-overflows/summary", params={"catchment": KNOWN_CATCHMENT}
+        ).json()
+        assert filtered["catchment_name"] == KNOWN_CATCHMENT
+        assert 0 < filtered["asset_count"] < full["asset_count"]
+        assert filtered["total_volume_m3"] < full["total_volume_m3"]

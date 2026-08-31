@@ -18,6 +18,7 @@ dependencies = [
     "pymannkendall>=1.4.3",
     "python-dotenv>=1.0.1",
     "matplotlib>=3.10.8",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]

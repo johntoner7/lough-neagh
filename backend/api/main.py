@@ -29,7 +29,7 @@ load_dotenv()
 from api.config import Settings
 from api.db import close_pool, get_conn, init_pool
 from api.logging_config import configure_logging
-from api.routes import catchments, farms, lakes, river_segments, stations
+from api.routes import catchments, farms, lakes, river_segments, stations, storm_overflows
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(stations.warm_cache())
     asyncio.create_task(farms.warm_cache())
     asyncio.create_task(river_segments.warm_cache())
+    asyncio.create_task(storm_overflows.warm_cache())
     yield
     await close_pool()
     logger.info("Connection pool closed")
@@ -102,6 +103,7 @@ app.include_router(catchments.router)
 app.include_router(lakes.router)
 app.include_router(farms.router)
 app.include_router(river_segments.router)
+app.include_router(storm_overflows.router)
 
 
 @app.get("/config")

@@ -8,11 +8,11 @@ import Map, {
 } from 'react-map-gl/mapbox'
 import 'mapbox-gl/dist/mapbox-gl.css'
 
-import { API_BASE } from '../api'
-import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR, lowRiverPhosphorusColor, highRiverPhosphorusColor, midRiverPhosphorusColor, highCattleDensityColor, lowCattleDensityColor, midCattleDensityColor, veryHighCattleDensityColor } from '../constants'
+import { API_BASE, fetchStormOverflows } from '../api'
+import { FARM_YEAR_MIN, FARM_YEAR_MAX, LAKE_STATUS_YEAR, STORM_OVERFLOW_SNAPSHOT_YEAR, lowRiverPhosphorusColor, highRiverPhosphorusColor, midRiverPhosphorusColor, highCattleDensityColor, lowCattleDensityColor, midCattleDensityColor, veryHighCattleDensityColor, overflowUnsatisfactoryColor, overflowSatisfactoryColor, overflowUnmodelledColor } from '../constants'
 import { UI_TEXT } from '../uiText'
 
-import type { GeoJSONCollection, ScreenPoint, StationFeature } from '../types'
+import type { GeoJSONCollection, ScreenPoint, StationFeature, StormOverflowCollection } from '../types'
 import type { ExpressionSpecification } from 'mapbox-gl'
 
 interface FarmHover {
@@ -21,6 +21,18 @@ interface FarmHover {
   cattle: number
   sheep: number
   num_farms: number
+  x: number
+  y: number
+}
+
+interface OverflowHover {
+  name: string
+  classification: string | null
+  modelled: boolean
+  spill_frequency: number | null
+  spill_volume_m3: number | null
+  receiving_waterbody_name: string | null
+  coord_is_discharge_point: boolean
   x: number
   y: number
 }
@@ -79,6 +91,7 @@ interface Props {
   keyStationsData: GeoJSONCollection
   selectedFeature: StationFeature | null
   showFarmLayer: boolean
+  showOverflowLayer: boolean
   onStationClick?: (feature: StationFeature, point: ScreenPoint) => void
 }
 
@@ -92,6 +105,34 @@ const cattleColor = [
   1.5, highCattleDensityColor, // 1.5 - 2.5: Deep Green (High - big jump in darkness)
   2.5, veryHighCattleDensityColor, // > 2.5: Black-Green (Very High - extremely dense)
 ] as unknown as ExpressionSpecification
+
+// Spill frequency is heavily skewed (median 3, 95th percentile 104, max 336),
+// so radius scales with the square root — a linear scale would let a handful of
+// assets swamp the map while everything else collapsed to a dot.
+const overflowRadiusAtZoom = (min: number, max: number) => [
+  'interpolate', ['linear'],
+  ['sqrt', ['coalesce', ['get', 'spill_frequency'], 0]],
+  0, min,
+  18.5, max, // sqrt(336) ≈ 18.3, the largest modelled asset
+]
+
+const overflowRadius = [
+  'interpolate', ['linear'], ['zoom'],
+  7, overflowRadiusAtZoom(2, 9),
+  11, overflowRadiusAtZoom(3, 26),
+] as unknown as ExpressionSpecification
+
+const overflowColor = [
+  'match',
+  ['get', 'classification'],
+  'Unsatisfactory', overflowUnsatisfactoryColor,
+  'Satisfactory', overflowSatisfactoryColor,
+  overflowUnmodelledColor,
+] as unknown as ExpressionSpecification
+
+// mapbox-gl returns feature properties untyped, with absent values as undefined.
+const asNumber = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
+const asString = (v: unknown): string | null => (v === null || v === undefined ? null : String(v))
 
 const stationRadius = [
   'interpolate', ['exponential', 1.6], ['zoom'],
@@ -122,6 +163,7 @@ export default function MapContainer({
   keyStationsData,
   selectedFeature,
   showFarmLayer,
+  showOverflowLayer,
   onStationClick,
 }: Props) {
   const mapRef = useRef<MapRef>(null)
@@ -129,6 +171,7 @@ export default function MapContainer({
   const farmCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
   const farmRequestRef = useRef<globalThis.Map<string, Promise<GeoJSON.FeatureCollection>>>(new globalThis.Map())
   const riverCacheRef = useRef<globalThis.Map<string, GeoJSON.FeatureCollection>>(new globalThis.Map())
+  const overflowCacheRef = useRef<globalThis.Map<string, StormOverflowCollection>>(new globalThis.Map())
 
   useEffect(() => {
     const el = containerRef.current
@@ -145,6 +188,10 @@ export default function MapContainer({
   const [farmHover, setFarmHover] = useState<FarmHover | null>(null)
   const [farmLayerError, setFarmLayerError] = useState(false)
   const [farmLayerLoading, setFarmLayerLoading] = useState(false)
+  const [overflowPoints, setOverflowPoints] = useState<StormOverflowCollection | null>(null)
+  const [overflowHover, setOverflowHover] = useState<OverflowHover | null>(null)
+  const [overflowLayerError, setOverflowLayerError] = useState(false)
+  const [overflowLayerLoading, setOverflowLayerLoading] = useState(false)
   const [legendOpen, setLegendOpen] = useState(() => window.innerWidth > 760)
 
   useEffect(() => {
@@ -172,6 +219,48 @@ export default function MapContainer({
       .catch(err => console.error(`Failed to fetch river segments for year ${year}:`, err))
     return () => { cancelled = true }
   }, [year, catchment])
+
+  // Storm overflows are a single published snapshot, so there is no year axis to
+  // prefetch along — only the catchment filter changes the response.
+  useEffect(() => {
+    if (!showOverflowLayer || year !== STORM_OVERFLOW_SNAPSHOT_YEAR) {
+      setOverflowLayerLoading(false)
+      setOverflowLayerError(false)
+      return
+    }
+
+    const key = catchment || 'all'
+    const cached = overflowCacheRef.current.get(key)
+    if (cached) {
+      setOverflowPoints(cached)
+      setOverflowLayerLoading(false)
+      setOverflowLayerError(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setOverflowLayerLoading(true)
+    setOverflowLayerError(false)
+
+    fetchStormOverflows(catchment, controller.signal)
+      .then(data => {
+        if (controller.signal.aborted) {return}
+        overflowCacheRef.current.set(key, data)
+        setOverflowPoints(data)
+      })
+      .catch(err => {
+        if (controller.signal.aborted) {return}
+        console.error('Failed to fetch storm overflows:', err)
+        setOverflowPoints(null)
+        setOverflowLayerError(true)
+      })
+      .finally(() => {
+        if (controller.signal.aborted) {return}
+        setOverflowLayerLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [catchment, showOverflowLayer, year])
 
   const farmCacheKey = (farmYear: number) => `${farmYear}:${catchment || 'all'}`
 
@@ -265,19 +354,59 @@ export default function MapContainer({
     onStationClick(match, { x: e.point.x, y: e.point.y })
   }, [onStationClick, stationsData, keyStationsData])
 
+  const overflowVisible = showOverflowLayer && year === STORM_OVERFLOW_SNAPSHOT_YEAR && overflowPoints !== null
+
   const handleMouseMove = useCallback((e: MapMouseEvent) => {
-    if (!showFarmLayer || !mapRef.current) {
+    const map = mapRef.current
+    if (!map) {return}
+
+    const clear = () => { setFarmHover(null); setOverflowHover(null) }
+    // Querying a layer id that is not in the style is an error, and layers mount
+    // a tick after the state that gates them.
+    const present = (...ids: string[]) => ids.filter(id => map.getLayer(id))
+
+    if (!showFarmLayer && !overflowVisible) {
+      clear()
+      return
+    }
+
+    // Stations stay the map's primary subject — a station under the cursor
+    // suppresses every other tooltip.
+    if (map.queryRenderedFeatures(e.point, { layers: present('stations-circle') }).length > 0) {
+      clear()
+      return
+    }
+
+    // Points beat polygons: an overflow sitting on a ward wins the hover.
+    if (overflowVisible) {
+      const overflowHit = map.queryRenderedFeatures(e.point, {
+        layers: present('overflow-modelled', 'overflow-unmodelled'),
+      })
+      if (overflowHit.length > 0) {
+        const p = overflowHit[0].properties as Record<string, unknown>
+        setFarmHover(null)
+        setOverflowHover({
+          name: String(p.name ?? ''),
+          classification: asString(p.classification),
+          // mapbox-gl coerces booleans when returning rendered features
+          modelled: p.modelled === true || p.modelled === 'true',
+          spill_frequency: asNumber(p.spill_frequency),
+          spill_volume_m3: asNumber(p.spill_volume_m3),
+          receiving_waterbody_name: asString(p.receiving_waterbody_name),
+          coord_is_discharge_point: p.coord_is_discharge_point === true || p.coord_is_discharge_point === 'true',
+          x: e.point.x,
+          y: e.point.y,
+        })
+        return
+      }
+    }
+    setOverflowHover(null)
+
+    if (!showFarmLayer) {
       setFarmHover(null)
       return
     }
-    const stationHit = mapRef.current.queryRenderedFeatures(e.point, {
-      layers: ['stations-circle', 'key-stations-circle'],
-    })
-    if (stationHit.length > 0) {
-      setFarmHover(null)
-      return
-    }
-    const farmHit = mapRef.current.queryRenderedFeatures(e.point, { layers: ['farm-fill'] })
+    const farmHit = map.queryRenderedFeatures(e.point, { layers: present('farm-fill') })
     if (farmHit.length > 0) {
       const p = farmHit[0].properties as Record<string, unknown>
       setFarmHover({
@@ -292,7 +421,7 @@ export default function MapContainer({
     } else {
       setFarmHover(null)
     }
-  }, [showFarmLayer])
+  }, [showFarmLayer, overflowVisible])
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -342,6 +471,96 @@ export default function MapContainer({
         whiteSpace: 'nowrap',
       }}>
         Farm layer unavailable — data could not be loaded
+      </div>
+    )}
+    {showOverflowLayer && year === STORM_OVERFLOW_SNAPSHOT_YEAR && overflowLayerLoading && (
+      <div style={{
+        position: 'absolute',
+        top: 12,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '6px 12px',
+        borderRadius: 999,
+        background: 'rgba(255,255,255,0.94)',
+        border: '1px solid rgba(17,24,39,0.12)',
+        boxShadow: '0 4px 14px rgba(15,23,42,0.1)',
+        color: '#374151',
+        fontSize: 12,
+        fontWeight: 600,
+        pointerEvents: 'none',
+      }}>
+        <div className="spinner" aria-hidden="true" />
+        <span>{UI_TEXT.sidebar.overflowLayer.loading}</span>
+      </div>
+    )}
+    {showOverflowLayer && year === STORM_OVERFLOW_SNAPSHOT_YEAR && overflowLayerError && (
+      <div style={{
+        position: 'absolute',
+        bottom: 40,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 10,
+        background: 'rgba(254,243,199,0.97)',
+        border: '1px solid #d97706',
+        borderRadius: 6,
+        padding: '6px 12px',
+        fontSize: 12,
+        color: '#92400e',
+        pointerEvents: 'none',
+        whiteSpace: 'nowrap',
+      }}>
+        {UI_TEXT.sidebar.overflowLayer.unavailable}
+      </div>
+    )}
+    {overflowHover && (
+      <div style={{
+        position: 'absolute',
+        left: overflowHover.x + 12,
+        top: overflowHover.y - 8,
+        zIndex: 11,
+        background: 'rgba(255,255,255,0.96)',
+        border: '1px solid #d1d5db',
+        borderRadius: 6,
+        padding: '8px 10px',
+        fontSize: 12,
+        lineHeight: 1.6,
+        pointerEvents: 'none',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+        maxWidth: 220,
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 2 }}>{overflowHover.name}</div>
+        {overflowHover.modelled ? (
+          <div>
+            <span style={{ color: overflowUnsatisfactoryColor, fontWeight: 600 }}>
+              {overflowHover.spill_frequency?.toLocaleString() ?? '—'}
+            </span>
+            {` ${UI_TEXT.sidebar.overflowLayer.spillsUnit}`}
+            {overflowHover.spill_volume_m3 !== null && (
+              <span style={{ color: '#6b7280' }}>
+                {` · ${Math.round(overflowHover.spill_volume_m3).toLocaleString()} ${UI_TEXT.sidebar.overflowLayer.volumeUnit}`}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div style={{ color: '#6b7280', fontStyle: 'italic' }}>
+            {UI_TEXT.sidebar.overflowLayer.notModelled}
+          </div>
+        )}
+        {overflowHover.classification && (
+          <div style={{ color: '#6b7280' }}>{overflowHover.classification}</div>
+        )}
+        {overflowHover.receiving_waterbody_name && (
+          <div style={{ color: '#6b7280' }}>→ {overflowHover.receiving_waterbody_name}</div>
+        )}
+        {!overflowHover.coord_is_discharge_point && (
+          <div style={{ color: '#9ca3af', marginTop: 2, fontSize: 11 }}>
+            {UI_TEXT.sidebar.overflowLayer.approximateLocation}
+          </div>
+        )}
       </div>
     )}
     {farmHover && (
@@ -409,7 +628,7 @@ export default function MapContainer({
         <span style={{ fontSize: 10, color: '#888', marginLeft: 6 }}>{legendOpen ? '▾' : '▸'}</span>
       </button>
       {legendOpen && (
-        <div style={{ padding: '8px 9px', maxHeight: showFarmLayer ? '40vh' : '30vh', overflowY: 'auto' }}>
+        <div style={{ padding: '8px 9px', maxHeight: showFarmLayer || overflowVisible ? '46vh' : '30vh', overflowY: 'auto' }}>
           <div style={{ fontWeight: 700, marginBottom: 5 }}>River phosphorus (lines)</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ width: 18, height: 3, borderRadius: 1, background: lowRiverPhosphorusColor, flexShrink: 0 }} />
@@ -449,6 +668,26 @@ export default function MapContainer({
               </div>
             </>
           )}
+          {overflowVisible && (
+            <>
+              <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', margin: '8px 0' }} />
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>{UI_TEXT.sidebar.overflowLayer.legendTitle}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: overflowUnsatisfactoryColor, flexShrink: 0 }} />
+                <span>{UI_TEXT.sidebar.overflowLayer.legendUnsatisfactory}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: overflowSatisfactoryColor, flexShrink: 0 }} />
+                <span>{UI_TEXT.sidebar.overflowLayer.legendSatisfactory}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'transparent', border: `1px solid ${overflowUnmodelledColor}`, boxSizing: 'border-box', flexShrink: 0 }} />
+                <span>{UI_TEXT.sidebar.overflowLayer.legendUnmodelled}</span>
+              </div>
+              <div style={{ color: '#6b7280', marginBottom: 3 }}>{UI_TEXT.sidebar.overflowLayer.legendSizeNote}</div>
+              <div style={{ color: '#6b7280', fontSize: '0.92em' }}>{UI_TEXT.sidebar.overflowLayer.legendFootnote}</div>
+            </>
+          )}
           {year === LAKE_STATUS_YEAR && (
             <>
               <div style={{ height: 1, background: 'rgba(17,24,39,0.1)', margin: '8px 0' }} />
@@ -483,13 +722,13 @@ export default function MapContainer({
       preserveDrawingBuffer
       interactiveLayerIds={(() => {
         const layers: string[] = []
-        if (onStationClick) {layers.push('stations-circle', 'key-stations-circle')}
+        if (onStationClick) {layers.push('stations-circle')}
         layers.push('river-lines')
         return layers
       })()}
       onClick={handleMapClick}
       onMouseMove={handleMouseMove}
-      onMouseLeave={() => { document.body.style.cursor = ''; setFarmHover(null) }}
+      onMouseLeave={() => { document.body.style.cursor = ''; setFarmHover(null); setOverflowHover(null) }}
       attributionControl={false}
     >
       <NavigationControl position="top-right" showCompass={false} />
@@ -574,6 +813,42 @@ export default function MapContainer({
               'text-halo-color': 'rgba(255,255,255,0.75)',
               'text-halo-width': 1,
               'text-opacity': 0.75,
+            }}
+          />
+        </Source>
+      )}
+
+      {/* ── Storm overflows: NI Water modelled spills, 2025 snapshot ──
+           Declared after the pressure layers and before the stations, so the
+           points sit above rivers and farms but never obscure the stations. ── */}
+      {overflowVisible && overflowPoints && (
+        <Source id="storm-overflows" type="geojson" data={overflowPoints as unknown as GeoJSON.FeatureCollection}>
+          {/* Assets NI Water has modelled — size by predicted spills per year */}
+          <Layer
+            id="overflow-modelled"
+            type="circle"
+            filter={['==', ['get', 'modelled'], true]}
+            paint={{
+              'circle-radius': overflowRadius,
+              'circle-color': overflowColor,
+              'circle-opacity': 0.75,
+              'circle-stroke-width': 0.8,
+              'circle-stroke-color': 'rgba(255,255,255,0.85)',
+            }}
+          />
+          {/* Not yet modelled — hollow ring, no size encoding, and held back
+              until zoom 9 so 1,200+ rings do not bury the station circles. */}
+          <Layer
+            id="overflow-unmodelled"
+            type="circle"
+            filter={['==', ['get', 'modelled'], false]}
+            minzoom={9}
+            paint={{
+              'circle-radius': 3,
+              'circle-color': 'rgba(0,0,0,0)',
+              'circle-opacity': 0.6,
+              'circle-stroke-width': 1,
+              'circle-stroke-color': overflowUnmodelledColor,
             }}
           />
         </Source>

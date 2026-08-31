@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from api.constants import WFD_THRESHOLD_MG_L
+from api.constants import STORM_OVERFLOW_SNAPSHOT, WFD_THRESHOLD_MG_L
 
 
 class StationProperties(BaseModel):
@@ -118,3 +118,46 @@ class FarmCollection(BaseModel):
     type: str = "FeatureCollection"
     features: list[FarmFeature]
     metadata: FarmCollectionMetadata
+
+
+class StormOverflowProperties(BaseModel):
+    car_id: str
+    name: str
+    spill_frequency: float | None
+    spill_volume_m3: float | None
+    classification: str | None
+    # False means NI Water has not modelled this asset — not that it never spills.
+    modelled: bool
+    monitored: bool
+    receiving_waterbody_name: str | None
+    local_management_area: str | None
+    catchment_name: str | None
+    # False means the point is the asset location, not the discharge point.
+    coord_is_discharge_point: bool
+
+
+class StormOverflowFeature(BaseModel):
+    type: str = "Feature"
+    geometry: dict | None
+    properties: StormOverflowProperties
+
+
+class StormOverflowCollectionMetadata(BaseModel):
+    snapshot: str = STORM_OVERFLOW_SNAPSHOT
+    asset_count: int
+    modelled_count: int
+
+
+class StormOverflowCollection(BaseModel):
+    type: str = "FeatureCollection"
+    features: list[StormOverflowFeature]
+    metadata: StormOverflowCollectionMetadata
+
+
+class StormOverflowSummary(BaseModel):
+    catchment_name: str | None
+    snapshot: str = STORM_OVERFLOW_SNAPSHOT
+    asset_count: int
+    modelled_count: int
+    total_spills: float | None
+    total_volume_m3: float | None

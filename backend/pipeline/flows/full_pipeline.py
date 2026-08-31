@@ -14,12 +14,14 @@ from sqlalchemy import create_engine, text
 
 from backend.pipeline.ingest.farm_census import backfill_farm_census_catchments, insert_farm_census
 from backend.pipeline.ingest.foi import load_and_clean_foi
-from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_river_segments, insert_stations, insert_waterbodies
+from backend.pipeline.ingest.insert import insert_lakes, insert_readings, insert_river_segments, insert_stations, insert_storm_overflows, insert_waterbodies
 from backend.pipeline.ingest.lakes import load_lakes
+from backend.pipeline.ingest.storm_overflows import load_storm_overflows
 from backend.pipeline.ingest.wfd_sites import load_wfd_sites
 from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
 from backend.pipeline.process.join import enrich_stations, join_segments_to_stations
 from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
+from backend.pipeline.process.storm_overflow_catchments import resolve_catchments
 from backend.pipeline.repositories.metrics import (
     fetch_annual_means,
     fetch_annual_data_for_trends,
@@ -96,6 +98,35 @@ def ingest_river_segments(enriched: gpd.GeoDataFrame, database_url: str) -> dict
     return {"river_segments": len(segments)}
 
 
+def ingest_storm_overflows(database_url: str) -> dict[str, int]:
+    """Load NI Water modelled spills and stamp each asset with a catchment."""
+    engine = create_engine(database_url)
+    overflows = load_storm_overflows()
+
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT DISTINCT river_waterbody_id, catchment_name FROM stations"
+            " WHERE river_waterbody_id IS NOT NULL AND catchment_name IS NOT NULL"
+        )).fetchall()
+    waterbody_to_catchment = {row[0]: row[1] for row in rows}
+    known_catchments = set(waterbody_to_catchment.values())
+
+    overflows["catchment_name"] = resolve_catchments(
+        overflows, waterbody_to_catchment, known_catchments
+    )
+    matched = int(overflows["catchment_name"].notna().sum())
+    logger.info(
+        "Resolved catchments for %d of %d storm overflows", matched, len(overflows)
+    )
+
+    insert_storm_overflows(overflows, engine)
+    return {
+        "storm_overflows": len(overflows),
+        "storm_overflows_with_catchment": matched,
+        "storm_overflows_modelled": int(overflows["modelled"].sum()),
+    }
+
+
 def ingest_farms(database_url: str) -> dict[str, int]:
     engine = create_engine(database_url)
     n = insert_farm_census(engine)
@@ -138,7 +169,14 @@ def run_full_pipeline(database_url: str | None = None) -> dict[str, int]:
     farm_summary = ingest_farms(url)
     logger.info("Farm census ingested.")
 
-    return {**persist_summary, **metrics_summary, **seg_summary, **farm_summary}
+    logger.info("Ingesting storm overflows...")
+    overflow_summary = ingest_storm_overflows(url)
+    logger.info("Storm overflows ingested.")
+
+    return {
+        **persist_summary, **metrics_summary, **seg_summary,
+        **farm_summary, **overflow_summary,
+    }
 
 
 if __name__ == "__main__":
