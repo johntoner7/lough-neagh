@@ -143,7 +143,6 @@ async def warm_cache() -> None:
 
 @router.get("/geojson", response_model=StormOverflowCollection)
 async def get_storm_overflows_geojson(
-    response: Response,
     catchment: str | None = Query(None),
 ) -> Response:
     """
@@ -159,12 +158,14 @@ async def get_storm_overflows_geojson(
     - catchment_name: resolved from the receiving waterbody, else the management area
     - coord_is_discharge_point: false where the point marks the asset, not the outfall
     """
-    response.headers["Cache-Control"] = "public, max-age=86400"
-
     if catchment not in _geojson_cache:
         _geojson_cache[catchment] = await _fetch_geojson(catchment)
 
-    return Response(content=_geojson_cache[catchment], media_type="application/json")
+    return Response(
+        content=_geojson_cache[catchment],
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @router.get("/summary", response_model=StormOverflowSummary)
