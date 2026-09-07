@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
@@ -54,11 +53,11 @@ async def get_years(response: Response) -> list[int]:
 @router.get("/geojson", response_class=Response)
 async def get_stations_geojson(
     year: int = Query(..., description="Year to return annual metrics for"),
-    catchment: Optional[str] = Query(None, description="Filter to one named catchment"),
+    catchment: str | None = Query(None, description="Filter to one named catchment"),
     wfd_matched_only: bool = Query(False, description="Only return WFD-matched stations"),
     with_data_only: bool = Query(False, description="Only return stations with annual data for the selected year"),
     metric: str = Query("annual", pattern="^(annual|rolling)$", description="Metric: annual or rolling"),
-    bbox: Optional[str] = Query(None, description="Bounding box: minLon,minLat,maxLon,maxLat (WGS84)"),
+    bbox: str | None = Query(None, description="Bounding box: minLon,minLat,maxLon,maxLat (WGS84)"),
 ) -> Response:
     """Return all stations as a GeoJSON FeatureCollection for a given year."""
     try:

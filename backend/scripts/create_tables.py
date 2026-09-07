@@ -6,7 +6,6 @@ import os
 
 from sqlalchemy import create_engine, text
 
-
 TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS stations (
     station_code        INTEGER PRIMARY KEY,

@@ -188,6 +188,7 @@ def test_annual_refresh_idempotent(db_engine):
         proc = subprocess.run(
             [sys.executable, "-m", "backend.pipeline.flows.annual_refresh",
              "--csv-path", str(small_csv)],
+            check=False,
             capture_output=True,
             text=True,
             env=os.environ.copy(),

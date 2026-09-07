@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, AsyncGenerator
+from typing import TYPE_CHECKING
 
 import psycopg
 from psycopg_pool import AsyncConnectionPool
@@ -33,7 +34,7 @@ async def close_pool() -> None:
 
 
 @asynccontextmanager
-async def get_conn() -> AsyncGenerator[psycopg.AsyncConnection, None]:
+async def get_conn() -> AsyncGenerator[psycopg.AsyncConnection]:
     assert _pool is not None, "Connection pool not initialised — call init_pool() first"
     async with _pool.connection() as conn:
         yield conn

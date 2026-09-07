@@ -24,7 +24,17 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
+    "ruff>=0.8.0",
 ]
+
+[tool.ruff]
+line-length = 160
+target-version = "py313"
+
+[tool.ruff.lint]
+# BLE001: broad `except Exception` is deliberate at these boundaries (readiness
+# probes, best-effort cache writes) — the intent is "log and continue", not a bug.
+ignore = ["BLE001"]
 
 [build-system]
 requires = ["hatchling>=1.26"]

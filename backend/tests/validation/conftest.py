@@ -94,6 +94,7 @@ def db_engine():
 @pytest.fixture(scope="session")
 def api_client(db_engine):
     from fastapi.testclient import TestClient
+
     from api.main import app
     client = TestClient(app)
     r = client.get("/health")

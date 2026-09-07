@@ -26,8 +26,8 @@ from backend.pipeline.ingest.foi import load_and_clean_foi
 from backend.pipeline.process.annual_refresh import prepare_new_readings_for_insert
 from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
 from backend.pipeline.repositories.metrics import (
-    fetch_annual_means,
     fetch_annual_data_for_trends,
+    fetch_annual_means,
     fetch_existing_reading_keys,
     update_annual_metrics_for_stations,
     update_trend_results_for_stations,

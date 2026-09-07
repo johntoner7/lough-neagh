@@ -10,7 +10,6 @@ import pytest
 
 from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

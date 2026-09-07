@@ -21,8 +21,8 @@ from backend.pipeline.ingest.wfd_waterbodies import load_wfd_waterbodies
 from backend.pipeline.process.join import enrich_stations, join_segments_to_stations
 from backend.pipeline.process.metrics import compute_rolling_means, compute_trend_results
 from backend.pipeline.repositories.metrics import (
-    fetch_annual_means,
     fetch_annual_data_for_trends,
+    fetch_annual_means,
     swap_annual_metrics,
     swap_trend_results,
 )

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Optional
 
-
-def parse_bbox_query(bbox: Optional[str]) -> Optional[tuple[float, float, float, float]]:
+def parse_bbox_query(bbox: str | None) -> tuple[float, float, float, float] | None:
     """Parse a bbox query string into a 4-tuple of floats."""
     if bbox is None:
         return None
@@ -22,11 +20,11 @@ def parse_bbox_query(bbox: Optional[str]) -> Optional[tuple[float, float, float,
 
 def build_geojson_cache_key(
     year: int,
-    catchment: Optional[str],
+    catchment: str | None,
     wfd_matched_only: bool,
     with_data_only: bool,
     metric: str,
-    bbox: Optional[str],
+    bbox: str | None,
 ) -> tuple:
     """Build the immutable cache key used for station GeoJSON responses."""
     return (year, catchment, wfd_matched_only, with_data_only, metric, bbox)

@@ -23,7 +23,6 @@ from pathlib import Path
 
 from sqlalchemy import create_engine, text
 
-
 # ─── Required source files ────────────────────────────────────────────────────
 
 DATA_ROOT = Path("data/raw")
@@ -64,7 +63,7 @@ def check_db(database_url: str) -> bool:
         engine = create_engine(database_url)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        print(f"  OK       database reachable")
+        print("  OK       database reachable")
         return True
     except Exception as e:
         print(f"  FAIL     database: {e}")

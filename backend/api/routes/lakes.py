@@ -40,10 +40,9 @@ async def get_lakes_geojson(response: Response) -> LakeCollection:
     # Lake WFD data is updated annually — safe to cache for 24 hours.
     response.headers["Cache-Control"] = "public, max-age=86400"
 
-    async with get_conn() as conn:
-        async with conn.cursor(row_factory=dict_row) as cur:
-            await cur.execute(sql)
-            rows = await cur.fetchall()
+    async with get_conn() as conn, conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql)
+        rows = await cur.fetchall()
 
     features = []
     for row in rows:

@@ -6,7 +6,7 @@ import logging
 
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import Point, LineString, MultiLineString, MultiPolygon
+from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point
 from shapely.ops import linemerge
 from sqlalchemy import text
 

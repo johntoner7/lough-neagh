@@ -282,7 +282,7 @@ export default function MapContainer({
       const p = farmHit[0].properties as Record<string, unknown>
       setFarmHover({
         dea_name: String(p.dea_name ?? ''),
-        cattle_per_ha: p.cattle_per_ha != null ? Number(p.cattle_per_ha) : null,
+        cattle_per_ha: p.cattle_per_ha !== null && p.cattle_per_ha !== undefined ? Number(p.cattle_per_ha) : null,
         cattle: Number(p.cattle ?? 0),
         sheep: Number(p.sheep ?? 0),
         num_farms: Number(p.num_farms ?? 0),
